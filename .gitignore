@@ -175,3 +175,8 @@ cython_debug/
 
 # data folder
 data/
+
+# custom folders
+outputs/
+wandb/
+multirun/
