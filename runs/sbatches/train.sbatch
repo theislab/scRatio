@@ -6,7 +6,7 @@
 #SBATCH --time=24:00:00
 #SBATCH --mem=400Gb
 #SBATCH --gres=gpu:1
-#SBATCH --cpus-per-task=4
+#SBATCH --cpus-per-task=10
 #SBATCH --partition=gpu_p
 #SBATCH --qos=gpu_normal
 ##SBATCH --constraint=h100_80gb
@@ -21,4 +21,10 @@ cd /home/icb/egor.antipov/scFM_density_estimation/
 source ../miniconda3/bin/activate
 conda activate scaling-transformers
 
-python ./runs/scripts/train.py
+python ./runs/scripts/train.py \
+    model.hidden_dims=[1024,1024,1024,1024] \
+    datamodule.num_pcs=60 \
+    datamodule.conditions=["donor","cytokine"] \
+    datamodule.index=1 \
+    datamodule.probability=0 \
+    datamodule.batch_size=256

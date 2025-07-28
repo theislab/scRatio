@@ -30,4 +30,4 @@ training:
 
 logger:
   project: "scfm_density_estimation"
-  name: "scfm_run_${datamodule.conditions}_${model.hidden_dims}_${datamodule.num_pcs}"
+  name: "scfm_run_${datamodule.conditions}_${model.hidden_dims}_${datamodule.num_pcs}_${datamodule.batch_size}"

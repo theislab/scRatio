@@ -170,9 +170,12 @@ class ConditionalFlowMatching(L.LightningModule):
         x1, cond = batch
         loss = self.shared_step(x1, cond)
         ws_dist = self.weighted_wasserstein(x1, cond)
+        knn_shares = self.knn_share_metrics(x1, cond, [10, 20, 30, 40, 50])
         
         self.log('val/loss', loss)
         self.log('val/wasserstein_distance', ws_dist)
+        for i in range(5):
+            self.log(f'val/knn_share_{(i+1)*10}', np.median(knn_shares[:, i]))
         
         return loss
     
@@ -181,10 +184,13 @@ class ConditionalFlowMatching(L.LightningModule):
         loss = self.shared_step(x1, cond)
         ws_dist = self.weighted_wasserstein(x1, cond)
         classif_test = self.classification_test(x1, cond, x1.device)
+        knn_shares = self.knn_share_metrics(x1, cond, [10, 20, 30, 40, 50])
         
         self.log('test/loss', loss)
         self.log('test/wasserstein_distance', ws_dist)
         self.log('test/classification_test', classif_test)
+        for i in range(5):
+            self.log(f'test/knn_share_{(i+1)*10}', np.median(knn_shares[:, i]))
         
         return loss
     
@@ -200,6 +206,36 @@ class ConditionalFlowMatching(L.LightningModule):
             ws_dist += wasserstein(X[mask], generated_samples[mask]) * np.sum(mask)
 
         return ws_dist / C.shape[0]
+    
+    def knn_share_metrics(self, data_samples, conditions, ks):
+        generated_samples = self.run_simulation(data_samples, conditions, n_steps=100).cpu().numpy()
+        data_samples = data_samples.cpu().numpy()
+        conditions = conditions.cpu().numpy()
+        
+        N = data_samples.shape[0]
+        all_samples = np.concatenate([data_samples, generated_samples], axis=0)
+        all_conditions = np.concatenate([conditions, conditions], axis=0)
+        shares = np.zeros((N, len(ks)))
+
+        for i in range(N):
+            gen_sample = generated_samples[i]
+            gen_condition = conditions[i]
+
+            mask = np.all(all_conditions == gen_condition, axis=1)
+            mask[N + i] = False
+            candidate_indices = np.where(mask)[0]
+
+            candidate_samples = all_samples[mask].copy()
+            dists = np.linalg.norm(candidate_samples - gen_sample, axis=1)
+            for j in range(len(ks)):
+                k = ks[j]
+                knn_idx = np.argsort(dists)[:k]
+                neighbor_indices = candidate_indices[knn_idx]
+        
+                num_generated = np.sum(neighbor_indices >= N)
+                shares[i, j] = num_generated / k
+
+        return shares
     
     def classification_test(self, x1, cond_orig, device):
         log_density = []

@@ -3,9 +3,8 @@ import scanpy as sc
 import lightning as L
 import numpy as np
 
-from scipy.sparse import csr_matrix
-from torch.utils.data import DataLoader, RandomSampler, Subset
-from .dataset import MixedConditionDataset
+from torch.utils.data import DataLoader, RandomSampler
+from .dataset import MixedConditionDataset, ProbabilisticMixedConditionDataset
 
 class scFMDataModule(L.LightningDataModule):
     def __init__(self, adata_path, conditions, num_conditions, condition_dims, batch_size,

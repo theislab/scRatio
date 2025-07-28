@@ -46,7 +46,7 @@ def main(cfg: DictConfig):
     
     callbacks = [
         ModelCheckpoint(
-            monitor="val/wasserstein_distance",
+            monitor="val/loss",
             mode="min",
             save_top_k=1,
             dirpath=cfg.training.output_dir,
