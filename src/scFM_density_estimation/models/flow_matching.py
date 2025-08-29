@@ -175,7 +175,8 @@ class ConditionalFlowMatching(L.LightningModule):
         self.log('val/loss', loss)
         self.log('val/wasserstein_distance', ws_dist)
         for i in range(5):
-            self.log(f'val/knn_share_{(i+1)*10}', np.median(knn_shares[:, i]))
+            self.log(f'val/knn_share_{(i+1)*10}_median', np.nanmedian(knn_shares[:, i]))
+            self.log(f'val/knn_share_{(i+1)*10}_mean', np.nanmean(knn_shares[:, i]))
         
         return loss
     
@@ -190,7 +191,8 @@ class ConditionalFlowMatching(L.LightningModule):
         self.log('test/wasserstein_distance', ws_dist)
         self.log('test/classification_test', classif_test)
         for i in range(5):
-            self.log(f'test/knn_share_{(i+1)*10}', np.median(knn_shares[:, i]))
+            self.log(f'test/knn_share_{(i+1)*10}_median', np.nanmedian(knn_shares[:, i]))
+            self.log(f'test/knn_share_{(i+1)*10}_mean', np.nanmean(knn_shares[:, i]))
         
         return loss
     
@@ -227,13 +229,16 @@ class ConditionalFlowMatching(L.LightningModule):
 
             candidate_samples = all_samples[mask].copy()
             dists = np.linalg.norm(candidate_samples - gen_sample, axis=1)
+            knn_sorted_idx = np.argsort(dists)
             for j in range(len(ks)):
                 k = ks[j]
-                knn_idx = np.argsort(dists)[:k]
-                neighbor_indices = candidate_indices[knn_idx]
-        
-                num_generated = np.sum(neighbor_indices >= N)
-                shares[i, j] = num_generated / k
+                
+                if knn_sorted_idx.shape[0] > k:
+                    neighbor_indices = candidate_indices[knn_sorted_idx[:k]]
+                    num_generated = np.sum(neighbor_indices >= N)
+                    shares[i, j] = num_generated / k
+                else:
+                    shares[i, j] = np.nan
 
         return shares
     

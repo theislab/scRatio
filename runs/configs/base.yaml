@@ -8,7 +8,9 @@ model:
   dropout: 0
 
 datamodule:
-  batch_size: 4096
+  train_batch_size: 4096
+  val_batch_size: 30000
+  test_batch_size: 60000
   adata_path: "/lustre/groups/ml01/projects/inverse_perturbation_models/datasets/pbmc/adata_for_cellflow_datasets_with_embeddings_and_200PCs.h5ad"
   conditions: ["cytokine"]
   num_conditions: 1
@@ -17,8 +19,8 @@ datamodule:
   index: 0
   num_pcs: 200
   num_workers: 4
-  val_split: 0.02
-  test_split: 0.01
+  val_split: 0.03
+  test_split: 0.02
   train_sample_size: 1e10
 
 training:
@@ -26,8 +28,9 @@ training:
   log_every_n_steps: 1e3
   val_check_interval: 1e4
   max_steps: 5e5
-  output_dir: ./outputs
+  output_dir: ./outputs/weights
+  save_checkpoint: true
 
 logger:
   project: "scfm_density_estimation"
-  name: "scfm_run_${datamodule.conditions}_${model.hidden_dims}_${datamodule.num_pcs}_${datamodule.batch_size}"
+  name: "scfm_run_${datamodule.conditions}_${model.hidden_dims}_${datamodule.num_pcs}_${datamodule.train_batch_size}"

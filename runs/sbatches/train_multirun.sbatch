@@ -20,9 +20,14 @@ conda activate scaling-transformers
 python ./runs/scripts/train.py \
     --multirun \
     model.hidden_dims=[1024,1024,1024,1024] \
-    datamodule.num_pcs=60 \
+    datamodule.num_pcs=50 \
     datamodule.conditions=["donor","cytokine"] \
-    datamodule.index=1 \
-    datamodule.probability=0 \
-    datamodule.batch_size=8192,4096,2048,1024,512,256 \
+    datamodule.num_conditions=2 \
+    datamodule.condition_dims=[12,91] \
+    datamodule.train_batch_size=8192,4096,2048,1024,512 \
+    datamodule.val_batch_size=30000 \
+    datamodule.test_batch_size=60000 \
+    datamodule.val_split=0.02 \
+    datamodule.test_split=0.01 \
+    training.save_checkpoint=false \
     +launcher=gpu_normal

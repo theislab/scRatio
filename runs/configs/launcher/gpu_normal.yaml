@@ -6,10 +6,9 @@ defaults:
 
 hydra:
   launcher:
-    cpus_per_task: 20
-    mem_gb: 500
+    cpus_per_task: 10
+    mem_gb: 400
     partition: gpu_p
     qos: gpu_normal
     gres: gpu:1
     timeout_min: 1440
-    # constraint: h100_80gb

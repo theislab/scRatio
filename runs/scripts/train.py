@@ -16,14 +16,16 @@ def main(cfg: DictConfig):
         conditions=cfg.datamodule.conditions,
         num_conditions=cfg.datamodule.num_conditions,
         condition_dims=cfg.datamodule.condition_dims,
-        batch_size=cfg.datamodule.batch_size,
         probability=cfg.datamodule.probability,
         index=cfg.datamodule.index,
         num_pcs=cfg.datamodule.num_pcs,
         num_workers=cfg.datamodule.num_workers,
         val_split=cfg.datamodule.val_split,
         test_split=cfg.datamodule.test_split,
-        train_sample_size=int(cfg.datamodule.train_sample_size)
+        train_sample_size=int(cfg.datamodule.train_sample_size),
+        train_batch_size=cfg.datamodule.train_batch_size,
+        val_batch_size=cfg.datamodule.val_batch_size,
+        test_batch_size=cfg.datamodule.test_batch_size,
     )
     
     model = ConditionalFlowMatching(
@@ -41,18 +43,22 @@ def main(cfg: DictConfig):
     
     wandb_logger = WandbLogger(
         project=cfg.logger.project,
-        name=cfg.logger.name
+        name=cfg.logger.name,
+        config=dict(cfg),
     )
     
-    callbacks = [
-        ModelCheckpoint(
-            monitor="val/loss",
-            mode="min",
-            save_top_k=1,
-            dirpath=cfg.training.output_dir,
-            filename=cfg.logger.name+"_best-checkpoint"
-        ),
-    ]
+    callbacks = []
+    
+    if cfg.training.save_checkpoint:
+        callbacks.append(
+            ModelCheckpoint(
+                monitor="val/loss",
+                mode="min",
+                save_top_k=1,
+                dirpath=cfg.training.output_dir,
+                filename=cfg.logger.name+"_best-checkpoint"
+            )
+        )
     
     trainer = L.Trainer(
         max_steps=int(cfg.training.max_steps),
