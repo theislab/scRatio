@@ -180,4 +180,5 @@ data/
 outputs/
 wandb/
 multirun/
-notebooks/combosciplex_bio/scvi_models/
+*_models/
+weights/

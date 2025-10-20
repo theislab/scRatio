@@ -3,11 +3,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 import lightning as L
 import numpy as np
-import matplotlib.pyplot as plt
+
+from umap import UMAP
+from torchdyn.core import NeuralODE
 
 from .optimal_transport import OTPlanSampler, wasserstein
-from torchdyn.core import NeuralODE
-from umap import UMAP
+from .node_wrappers import NODEWrapper, NODEWrapper_with_trace_div, NODEWrapper_with_ratio, NODEWrapper_with_ratio_tvf
 
 #---Unconditional model---
 class FlowMatchingMLP(nn.Module):
@@ -112,6 +113,7 @@ class ConditionalFlowMatching(L.LightningModule):
                  use_ot_sampler: bool = False,
                  ot_method: str = "exact",
                  dropout: float = 0,
+                 sigma_min: float = None,
                  ):
         super().__init__()
         self.save_hyperparameters()
@@ -144,17 +146,19 @@ class ConditionalFlowMatching(L.LightningModule):
     def shared_step(self, x1, cond):
         device = x1.device
         
-        # sample x0 and t
         x0 = torch.randn_like(x1).to(device)
         t = torch.rand(x1.shape[0]).unsqueeze(1).to(device)
         
-        # use ot sampler
         if self.use_ot_sampler:
             x0, x1, cond = self.sample_ot(x0, x1, cond)
         
-        # compute xt and ut
-        xt = x0 + t * (x1 - x0)
-        ut = x1 - x0
+        if self.sigma_min is None:
+            xt = x0 + t * (x1 - x0)
+            ut = x1 - x0
+        else:
+            xt = x0 + t * (x1 - (1 - self.sigma_min) * x0)
+            ut = x1 - (1 - self.sigma_min) * x0
+            
         pred_ut = self(xt, t, cond)
         
         loss = F.mse_loss(pred_ut, ut)
@@ -282,20 +286,26 @@ class ConditionalFlowMatching(L.LightningModule):
         cond_final = torch.cat(cond_final, dim=0).to(device)
         return x0_final, x1_final, cond_final
     
-    def get_node(self, cond, node_type="simulation", estimator_type="exact"):
+    def get_node(self, condition, control=None, point=None, node_type="simulation", estimator_type="exact"):
         if node_type == "simulation":
-            return NeuralODE(NODEWrapper(self, cond), solver="dopri5",
+            return NeuralODE(NODEWrapper(self, condition), solver="dopri5",
                               sensitivity="adjoint", atol=1e-4, rtol=1e-4)
         elif node_type == "density":
-            return NeuralODE(NODEWrapper_with_trace_div(self, cond, estimator_type), solver="dopri5",
+            return NeuralODE(NODEWrapper_with_trace_div(self, condition, estimator_type), solver="dopri5",
+                              sensitivity="adjoint", atol=1e-4, rtol=1e-4)
+        elif node_type == "ratio":
+            return NeuralODE(NODEWrapper_with_ratio(self, condition, control, estimator_type), solver="dopri5",
+                              sensitivity="adjoint", atol=1e-4, rtol=1e-4)
+        elif node_type == "ratio_tvf":
+            return NeuralODE(NODEWrapper_with_ratio_tvf(self, condition, control, point, estimator_type), solver="dopri5",
                               sensitivity="adjoint", atol=1e-4, rtol=1e-4)
         
     def get_umap_reducer(self, random_state=42):
         self.reducer = UMAP(n_neighbors=15, min_dist=0.5, n_components=2, random_state=random_state)
         
-    def run_simulation(self, data_samples, cond, n_steps=100):
+    def run_simulation(self, data_samples, condition, n_steps=100):
         device = data_samples.device
-        node = self.get_node(cond)
+        node = self.get_node(condition, node_type="simulation")
         
         with torch.no_grad():
             traj = node.trajectory(
@@ -305,79 +315,29 @@ class ConditionalFlowMatching(L.LightningModule):
             
         return traj[-1]
         
-    def estimate_log_density(self, data_samples, cond, n_steps=100):
+    def estimate_log_density(self, data_samples, condition, n_steps=100):
         device = data_samples.device
-        node = self.get_node(cond, node_type="density", estimator_type="hutch_gaussian")
+        node = self.get_node(condition, node_type="density", estimator_type="hutch_gaussian")
         
         with torch.no_grad():
             traj = node.trajectory(
                 torch.cat([data_samples, torch.zeros(data_samples.shape[0], 1).to(device)], dim=-1),
                 t_span=torch.linspace(1, 0, n_steps).to(device)
             )
-        z0, div = traj[-1][:, :-1], traj[-1][:, -1]
+        z0, div = traj[-1, :, :-1], traj[-1, :, -1]
         log_p1 = -0.5 * (z0 ** 2).sum(dim=1) - 0.5 * z0.shape[1] * np.log(2 * np.pi) + div
         
         return log_p1.cpu().numpy()
     
-class NODEWrapper(torch.nn.Module):
-    """
-    Wraps model to torchdyn compatible format.
-    """
-    def __init__(self, model, cond):
-        super().__init__()
-        self.model = model
-        self.cond = cond
-
-    def forward(self, t, x, *args, **kwargs):
-        return self.model(x, t, self.cond)
-    
-def exact_div_fn(u):
-    """Accepts a function u:R^D -> R^D."""
-    J = torch.func.jacrev(u)
-    return lambda x, *args: torch.trace(J(x))
-
-
-def div_fn_hutch_trace(u):
-    def div_fn(x, eps):
-        _, vjpfunc = torch.func.vjp(u, x)
-        return (vjpfunc(eps)[0] * eps).sum()
-
-    return div_fn
-
-class NODEWrapper_with_trace_div(torch.nn.Module):
-    """
-    Wraps model to torchdyn compatible format with trace of the Jacobian.
-    """
-    def __init__(self, model, cond, likelihood_estimator="exact"):
-        super().__init__()
-        self.model = model
-        self.cond = cond
-        self.div_fn, self.eps_fn = self.get_div_and_eps(likelihood_estimator)
-
-    def get_div_and_eps(self, likelihood_estimator):
-        if likelihood_estimator == "exact":
-            return exact_div_fn, None
-        if likelihood_estimator == "hutch_gaussian":
-            return div_fn_hutch_trace, torch.randn_like
-        if likelihood_estimator == "hutch_rademacher":
-
-            def eps_fn(x):
-                return torch.randint_like(x, low=0, high=2).float() * 2 - 1.0
-
-            return div_fn_hutch_trace, eps_fn
-        raise NotImplementedError(
-            f"likelihood estimator {likelihood_estimator} is not implemented"
-        )
-
-    def forward(self, t, x, *args, **kwargs):
-        x = x[..., :-1]
+    def estimate_log_density_ratio(self, data_samples, condition, control, n_steps=100):
+        device = data_samples.device
+        node = self.get_node(condition, control, node_type="ratio", estimator_type="hutch_gaussian")
         
-        def vecfield(y):
-            return self.model(y.unsqueeze(0), t, self.cond[:1]).squeeze()
-
-        if self.eps_fn is None:
-            div = torch.vmap(self.div_fn(vecfield))(x)
-        else:
-            div = torch.vmap(self.div_fn(vecfield))(x, self.eps_fn(x))
-        dx = self.model(x, t, self.cond)
-        return torch.cat([dx, div[:, None]], dim=-1)
+        with torch.no_grad():
+            traj = node.trajectory(
+                torch.cat([data_samples, torch.zeros(data_samples.shape[0], 1).to(device)], dim=-1),
+                t_span=torch.linspace(1, 0, n_steps).to(device)
+            )
+        log_ratio = traj[-1, :, -1]
+        
+        return -log_ratio.cpu().numpy()

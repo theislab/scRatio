@@ -202,3 +202,12 @@ def plot_boxplot_comparison(data1, data2, label1, label2):
     sns.boxplot(x='group', y='value', data=df)
     plt.title('Boxplot comparison')
     plt.show()
+    
+def plot_density_ratios_scanpy_new(adata, densities, mask, cmap="viridis", size=1, figsize=(6, 6),
+                                   title="Density ratio", **kwargs):
+    densities[~mask] = None
+    adata.obs["density"] = densities
+    
+    plt.rcParams['figure.figsize'] = figsize
+    
+    sc.pl.umap(adata, color="density", s=size, cmap=cmap, title=title, **kwargs)
