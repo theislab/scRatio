@@ -123,6 +123,7 @@ class ConditionalFlowMatching(L.LightningModule):
         self.cond_encoder = ConditionEncoder(cond_dim, cond_hidden_dims, cond_out_dim, dropout)
         self.mlp = FlowMatchingMLP(input_dim + 1 + cond_out_dim, hidden_dims, input_dim, dropout)
         self.ot_sampler = OTPlanSampler(method=ot_method)
+        self.sigma_min = sigma_min
         
         self.use_encoder = use_encoder
         self.use_ot_sampler = use_ot_sampler
