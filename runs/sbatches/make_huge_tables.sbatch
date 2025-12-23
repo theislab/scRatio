@@ -19,5 +19,6 @@ conda activate scaling-transformers
 
 python ./runs/scripts/make_huge_tables_uni.py \
     --multirun \
-    +run_type=diff,easy,really_easy \
+    +run_type=diff,easy \
+    +num_dims=10,50,100 \
     +launcher=super_gpu_normal

@@ -29,18 +29,38 @@ def prepare_dataset(n, N, cond_dim, locs):
     C_test = F.one_hot(torch.tensor(C_test).long(), num_classes=cond_dim).to("cuda").float()
     return X_train, X_test, C_train, C_test
 
+class Encoder(nn.Module):
+    def __init__(self, cond_dim: int = 1, cond_hidden_dims: list = [],
+                 cond_out_dim: int = 2, dropout: float = 0):
+        super().__init__()
+        layers = []
+        prev_dim = cond_dim
+        for dim in cond_hidden_dims:
+            layers.extend([
+                nn.Linear(prev_dim, dim),
+                nn.SELU(),
+                nn.Dropout(dropout)
+            ])
+            prev_dim = dim
+
+        layers.append(nn.Linear(prev_dim, cond_out_dim))
+        self.encoder = nn.Sequential(*layers)
+
+    def forward(self, cond):
+        return self.encoder(cond)
+
 class ConditionalFlowMatchingWithScore(L.LightningModule):
     def __init__(
         self,
         input_dim: int,
-        cond_dim: int,
+        cond_dims: list,
+        hidden_dims: list,
+        encoder_hidden_dims: list,
+        encoder_out_dim: int,
         lambda_t: Callable,
         lambda_sp_t: Callable,
-        hidden_dims: list = [],
-        cond_hidden_dims: list = [16],
-        cond_out_dim: int = 8,
+        betas: list,
         lr: float = 1e-3,
-        use_encoder: bool = False,
         use_ot_sampler: bool = False,
         ot_method: str = "exact",
         dropout: float = 0
@@ -48,29 +68,38 @@ class ConditionalFlowMatchingWithScore(L.LightningModule):
         super().__init__()
         self.save_hyperparameters()
 
-        if not use_encoder:
-            cond_out_dim = cond_dim
-
-        self.cond_encoder = ConditionEncoder(cond_dim, cond_hidden_dims, cond_out_dim, dropout)
-        self.vf_mlp = FlowMatchingMLP(input_dim + 1 + cond_out_dim, hidden_dims, input_dim, dropout)
-        self.score_mlp = FlowMatchingMLP(input_dim + 1 + cond_out_dim, hidden_dims, input_dim, dropout)
+        self.data_encoder = Encoder(input_dim, encoder_hidden_dims, encoder_out_dim, dropout)
+        self.cond_encoders = nn.ModuleList([
+            Encoder(cond_dim, encoder_hidden_dims, encoder_out_dim, dropout)
+            for cond_dim in cond_dims
+        ])
+        self.vf_mlp = FlowMatchingMLP(encoder_out_dim + 1, hidden_dims, input_dim, dropout)
+        self.score_mlp = FlowMatchingMLP(encoder_out_dim + 1, hidden_dims, input_dim, dropout)
         
         self.lambda_t = lambda_t
         self.lambda_sp_t = lambda_sp_t
-        
-        self.use_encoder = use_encoder
+
+        self.betas = betas
+        self.encoder_out_dim = encoder_out_dim
         self.use_ot_sampler = use_ot_sampler
-        self.cond_dim = cond_dim
+        self.cond_dims = cond_dims
         self.lr = lr
 
-    def forward(self, x, t, cond):
+    def forward(self, x, t, cond, use_conds=[True]):
         if t.dim() == 0 or t.size()[0] == 1:
             t = t.expand(x.shape[0]).unsqueeze(1)
         elif t.dim() == 1:
             t = t.unsqueeze(1)
-
-        cond_enc = self.cond_encoder(cond) if self.use_encoder else cond
-        xtc = torch.cat([x, t, cond_enc], dim=1)
+        
+        start = 0
+        xc = self.data_encoder(x)
+        for i, cond_dim in enumerate(self.cond_dims):
+            if use_conds[i]:
+                xc += self.cond_encoders[i](cond[:, start:(start + cond_dim)])
+            start += cond_dim
+        
+        xtc = torch.cat([xc, t], dim=1)
+        
         vf = self.vf_mlp.mlp(xtc)
         score = self.score_mlp.mlp(xtc)
         
@@ -86,7 +115,8 @@ class ConditionalFlowMatchingWithScore(L.LightningModule):
         ut = x1 + self.lambda_sp_t(t) / self.lambda_t(t) * x0
         c_t = self.lambda_t(t) ** 2 - self.lambda_sp_t(t) * t
 
-        pred_ut, pred_score = self(xt, t, cond)
+        use_conds = (np.random.uniform(size=len(self.betas)) >= np.array(self.betas))
+        pred_ut, pred_score = self(xt, t, cond, use_conds)
         
         vf_loss = F.mse_loss(pred_ut, ut)
         score_loss = F.mse_loss(c_t * pred_score, t * ut - xt)
@@ -307,63 +337,61 @@ def evaluate_model(model, data_samples, cond, cond_dim, condition, control, locs
     
     time_hat_v2 = time.time() - start_hat_v2
 
-    start_hat_v3 = time.time()
+    # start_hat_v3 = time.time()
 
     # correction term - its own field
-    node = NeuralODE(
-        NODEWrapper_with_ratio_tvf_rnl(model, control=torch.tensor(control).float().expand(data_samples.shape[0], cond_dim).to(device),
-            condition=torch.tensor(condition).float().expand(data_samples.shape[0], cond_dim).to(device), point=cond),
-        solver="dopri5", sensitivity="adjoint", atol=1e-4, rtol=1e-4
-    )
+    # node = NeuralODE(
+    #     NODEWrapper_with_ratio_tvf_rnl(model, control=torch.tensor(control).float().expand(data_samples.shape[0], cond_dim).to(device),
+    #         condition=torch.tensor(condition).float().expand(data_samples.shape[0], cond_dim).to(device), point=cond),
+    #     solver="dopri5", sensitivity="adjoint", atol=1e-4, rtol=1e-4
+    # )
     
-    with torch.no_grad():
-        traj = node.trajectory(
-            torch.cat([data_samples, torch.zeros(data_samples.shape[0], 1).to(device)], dim=-1),
-            t_span=torch.linspace(1, 0, 100).to(device)
-        )
-    z0, ratio = traj[-1][:, :-1], traj[-1][:, -1]
-    log_ratio_hat_v3 = -ratio.cpu().numpy()
+    # with torch.no_grad():
+    #     traj = node.trajectory(
+    #         torch.cat([data_samples, torch.zeros(data_samples.shape[0], 1).to(device)], dim=-1),
+    #         t_span=torch.linspace(1, 0, 100).to(device)
+    #     )
+    # z0, ratio = traj[-1][:, :-1], traj[-1][:, -1]
+    # log_ratio_hat_v3 = -ratio.cpu().numpy()
     
-    time_hat_v3 = time.time() - start_hat_v3
+    # time_hat_v3 = time.time() - start_hat_v3
     
-    start_hat_v4 = time.time()
+    # start_hat_v4 = time.time()
     
     # correction term - its own field - use only score
-    node = NeuralODE(
-        NODEWrapper_with_ratio_tvf_score(model, control=torch.tensor(control).float().expand(data_samples.shape[0], cond_dim).to(device),
-            condition=torch.tensor(condition).float().expand(data_samples.shape[0], cond_dim).to(device), point=cond),
-        solver="dopri5", sensitivity="adjoint", atol=1e-4, rtol=1e-4
-    )
+    # node = NeuralODE(
+    #     NODEWrapper_with_ratio_tvf_score(model, control=torch.tensor(control).float().expand(data_samples.shape[0], cond_dim).to(device),
+    #         condition=torch.tensor(condition).float().expand(data_samples.shape[0], cond_dim).to(device), point=cond),
+    #     solver="dopri5", sensitivity="adjoint", atol=1e-4, rtol=1e-4
+    # )
     
-    with torch.no_grad():
-        traj = node.trajectory(
-            torch.cat([data_samples, torch.zeros(data_samples.shape[0], 1).to(device)], dim=-1),
-            t_span=torch.linspace(1, 0, 100).to(device)
-        )
-    z0, ratio = traj[-1][:, :-1], traj[-1][:, -1]
-    log_ratio_hat_v4 = -ratio.cpu().numpy()
+    # with torch.no_grad():
+    #     traj = node.trajectory(
+    #         torch.cat([data_samples, torch.zeros(data_samples.shape[0], 1).to(device)], dim=-1),
+    #         t_span=torch.linspace(1, 0, 100).to(device)
+    #     )
+    # z0, ratio = traj[-1][:, :-1], traj[-1][:, -1]
+    # log_ratio_hat_v4 = -ratio.cpu().numpy()
     
-    time_hat_v4 = time.time() - start_hat_v4
+    # time_hat_v4 = time.time() - start_hat_v4
     
-    return [log_ratio_true, log_ratio_hat, log_ratio_hat_v2, log_ratio_hat_v3, log_ratio_hat_v4], [time_true, time_hat, time_hat_v2, time_hat_v3, time_hat_v4]
+    return [log_ratio_true, log_ratio_hat, log_ratio_hat_v2], [time_true, time_hat, time_hat_v2]
 
-def get_locs(run_type):
+def get_locs(run_type, n, cond_dim):
+    locs = [[0 for _ in range(n)]] + [np.random.randint(low=-1, high=1, size=(n)) for _ in range(cond_dim - 2)] + [np.random.randint(low=-1, high=1, size=(n)) * 2]
+
     if run_type == "diff":
-        locs = [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1], [2, 2, 0, 0, 0, 0, 2, 2, 2, 2], [2, 0, 0, 2, 0, 0, 0, 2, 0, 0], [3, 3, 3, 3, -1, 3, 3, 3, 3, -1]]
         condition = np.array([0, 0, 0, 1])
     elif run_type == "easy":
-        locs = [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1], [0, 0, 2, 0, 2, 2, 2, 0, 0, 2], [2, 2, 0, 0, 2, 2, 2, 0, 0, 2], [-1, -1, 3, -1, 3, 3, 3, -1, -1, 3]]
-        condition = np.array([0, 0, 0, 1])
-    elif run_type == "really_easy":
-        locs = [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1], [2, 2, 0, 0, 0, 0, 2, 2, 2, 2], [2, 0, 0, 2, 0, 0, 0, 2, 0, 0], [3, 3, 3, 3, -1, 3, 3, 3, 3, -1]]
-        condition = np.array([0, 1, 0, 0])
+        condition = np.array([0, 0, 1, 0])
     else:
         raise ValueError("Unknown value for run_type")
+
     return locs, condition
 
 @hydra.main(config_path="../configs", config_name="base", version_base=None)
 def main(cfg: DictConfig):
-    n = 10
+    n = cfg.num_dims
     N = 30_000
     cond_dim = 4
     batch_size = 512
@@ -373,11 +401,11 @@ def main(cfg: DictConfig):
     sigmas = [1, 0.75, 0.5, 0.25, 0]
     sigma_mins = [1e-1, 1e-2, 1e-3, 1e-4, 0]
 
-    names = ["true", "direct", "ct own rl", "ct own rnl", "ct own rnlvf"]
+    names = ["true", "direct", "ct own rl"]
 
     results = {}
 
-    locs, condition = get_locs(cfg.run_type)
+    locs, condition = get_locs(cfg.run_type, n, cond_dim)
 
     X_train, X_test, C_train, C_test = prepare_dataset(n, N, cond_dim, locs)
 
@@ -395,12 +423,13 @@ def main(cfg: DictConfig):
             for _ in tqdm(range(n_tries)):
                 model = ConditionalFlowMatchingWithScore(
                     input_dim=n,
+                    cond_dims=[cond_dim],
                     hidden_dims=[1024, 1024, 1024],
-                    cond_dim=cond_dim,
-                    use_encoder=False,
-                    use_ot_sampler=False,
+                    encoder_hidden_dims=[256],
+                    encoder_out_dim=50,
                     lambda_t=lambda_t,
                     lambda_sp_t=lambda_sp_t,
+                    betas=[0.1]
                 ).to("cuda")
                 optimizer = model.configure_optimizers()
                 
@@ -422,10 +451,10 @@ def main(cfg: DictConfig):
                     key = str(sigma_min) + " " + str(sigma) + " direct"
                 elif name == "ct own rl":
                     key = str(sigma_min) + " " + str(sigma) + " rl"
-                elif name == "ct own rnl":
-                    key = str(sigma_min) + " " + str(sigma) + " rnl"
-                elif name == "ct own rnlvf":
-                    key = str(sigma_min) + " " + str(sigma) + " rnlvf"
+                # elif name == "ct own rnl":
+                #     key = str(sigma_min) + " " + str(sigma) + " rnl"
+                # elif name == "ct own rnlvf":
+                #     key = str(sigma_min) + " " + str(sigma) + " rnlvf"
                 else:
                     raise ValueError("Unknown value for name")
                 
@@ -441,7 +470,7 @@ def main(cfg: DictConfig):
     results["mask_control"] = mask_control
     results["mask_both"] = mask_both
 
-    with open(f"/home/icb/egor.antipov/scFM_density_estimation/notebooks/tests/table_results/{cfg.run_type}_results_time_uni_v2.pkl", "wb") as f:
+    with open(f"/home/icb/egor.antipov/scFM_density_estimation/notebooks/tests/table_results/{cfg.run_type}_results_time_uni_{cfg.num_dims}.pkl", "wb") as f:
         pickle.dump(results, f)
 
     print("FINISHED")
