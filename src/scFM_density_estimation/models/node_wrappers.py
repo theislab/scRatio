@@ -4,13 +4,14 @@ class NODEWrapper(torch.nn.Module):
     """
     Wraps model to torchdyn compatible format.
     """
-    def __init__(self, model, cond):
+    def __init__(self, model, cond, **kwargs):
         super().__init__()
         self.model = model
         self.cond = cond
+        self.kwargs = kwargs
 
     def forward(self, t, x, *args, **kwargs):
-        return self.model(x, t, self.cond)
+        return self.model(x, t, self.cond, **self.kwargs)
     
 def exact_div_fn(u):
     """Accepts a function u:R^D -> R^D."""
