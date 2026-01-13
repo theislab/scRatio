@@ -7,7 +7,7 @@ defaults:
 hydra:
   launcher:
     cpus_per_task: 10
-    mem_gb: 400
+    mem_gb: 200
     partition: gpu_p
     qos: gpu_long
     gres: gpu:1
