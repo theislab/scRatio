@@ -142,7 +142,7 @@ def main(config):
     )
 
     # 8. Save model
-    save_dir = os.path.join(config.paths.output_dir, "scvi_runs", run_id)
+    save_dir = os.path.join(config.paths.output_dir, "scvi_runs", f"dim-{config.model.n_latent}-{run_id}")
     os.makedirs(
         save_dir,
         exist_ok=True
@@ -152,6 +152,7 @@ def main(config):
         save_dir,
         overwrite=True
     )
+    return 0
 
 
 if __name__ == "__main__":

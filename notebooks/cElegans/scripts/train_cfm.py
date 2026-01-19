@@ -6,6 +6,7 @@ import random
 import traceback
 import uuid
 
+from omegaconf import OmegaConf
 import hydra
 import lightning as L
 import matplotlib.pyplot as plt
@@ -79,7 +80,6 @@ def train_cfm_model(
 
 
 def save_cfm_model(model, save_dir, model_name, logger,):
-    os.makedirs(save_dir, exist_ok=True)
     model_path = os.path.join(save_dir, f"{model_name}_model.pt")
     logger.info(f"Saving model at {model_path}...")
     torch.save(model.state_dict(), model_path)
@@ -96,6 +96,10 @@ def main(config):
     ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     run_id = f"{ts}_{run_id}"
     save_dir = os.path.join(config.paths.output_dir, "cfm_runs", run_id)
+    os.makedirs(save_dir, exist_ok=True)
+    config_path = os.path.join(save_dir, "config.yaml")
+    with open(config_path, "w") as f:
+        f.write(OmegaConf.to_yaml(config))
     logger.info(f"Starting scvi run {run_id}...")
 
     # 2. Set reproducibility
@@ -184,7 +188,7 @@ def main(config):
     logger.info(f"Model trained, saving it with name \"{model_name}\" at {save_dir}...")
     save_cfm_model(cmodel, save_dir, model_name=model_name, logger=logger)
     logger.info("Model saved")
-
+    return 0
 
 
 if __name__ == "__main__":
