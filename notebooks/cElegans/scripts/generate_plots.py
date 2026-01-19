@@ -92,7 +92,7 @@ def pull_back_data_and_compute_llr(
             t_span=torch.linspace(1, 0, 100).to("cuda")
         )
     res = traj[-1].detach().cpu().numpy()
-    return res[:,:-1], res[:,-1]
+    return res[:,:-1], -res[:,-1]
 
 
 def get_ct_and_batch_names(
