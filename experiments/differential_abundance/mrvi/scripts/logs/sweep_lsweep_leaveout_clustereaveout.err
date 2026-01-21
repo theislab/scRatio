@@ -1,0 +1,4 @@
+/var/spool/slurmd/job33337286/slurm_script: line 25: cd: ../../../../../sweeps: No such file or directory
+python: can't open file '/ictstr01/home/icb/alessandro.palma/environment/scFM_density_estimation/experiments/baselines/mrvi/scripts/train_flow.py': [Errno 2] No such file or directory
+
+ERROR conda.cli.main_run:execute(47): `conda run python train_flow.py --config-path /home/icb/alessandro.palma/environment/scExpDesign-Reproducibility/bio_dataset_analysis/cmv_infection_dataset/forward_model/cluster_leaveout_sweeps/config --config-name train_flow --multirun +hparams_search=default +launcher=slurm callbacks.wandb_project_name=CFM_cmv_infection_cluster_sweep` failed. (See above for error)

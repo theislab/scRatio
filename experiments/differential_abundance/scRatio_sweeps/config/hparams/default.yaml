@@ -1,0 +1,5 @@
+adata_path: /home/icb/alessandro.palma/environment/scFM_density_estimation/project_folder/data/pbmc68k_oversampled/pbmc68k_0.2.h5ad
+dimensions: 10
+batch_size: 512
+scheduler_type: stochastic_0.1
+res_dir: /home/icb/alessandro.palma/environment/scFM_density_estimation/project_folder/results/abundance_test_experiment/scRatio_sweep
