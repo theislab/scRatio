@@ -1,0 +1,2 @@
+adata_path: "/lustre/groups/ml01/workspace/alessandro.palma/celldreamer/datasets/processed_full_genome/neurips/neurips.h5ad"
+cfm_model_dir: "/home/icb/lorenzo.consoli/repos/scFM_density_estimation/dumps/Neurips/cfm_runs/"
