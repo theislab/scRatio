@@ -14,7 +14,7 @@ def compute_precision_and_recall_auc(predicted, true):
 
 def cluster_metrics(abs_ratios, ratios, is_abundant, leiden_labels):
     # Non-abundant clusters should always be lower 
-    non_abundant_over_abundant = abs_ratios[~is_abundant].mean() / abs_ratios[is_abundant].mean()
+    non_abundant_over_abundant = abs_ratios[is_abundant].mean() / abs_ratios[~is_abundant].mean()
     # Compute fraction correct sign
     ratios_abundant = ratios[is_abundant]  # Only clusters 1 and 2 
     leiden_abundant = np.array(leiden_labels)[is_abundant]
@@ -129,7 +129,7 @@ def compute_evaluation_metrics(result_path, model, subsampling_rates, n_runs):
             name = f"corr_{metric}_p"
             results_per_run["metric"].append(name)
             results_per_run["run"].append(i) 
-            results_per_run["value"].append(sp.stats.pearsonr(results_per_oversamp_df_i[metric],
+            results_per_run["value"].append(sp.stats.spearmanr(results_per_oversamp_df_i[metric],
                                                  results_per_oversamp_df_i["p_major_cluster"])[0])
 
             name = f"mean_{metric}"

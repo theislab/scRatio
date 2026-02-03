@@ -5,11 +5,10 @@ defaults:
 
 hydra:
   launcher:
-    partition: gpu_p
-    qos: gpu_normal
+    partition: gpu_h100
+    qos: default
     cpus_per_task: 6
     mem_gb: 100
     gres: gpu:1
     timeout_min: 1440
-    array_parallelism: 20
-    exclude: supergpu02, gpusrv29, gpusrv50, gpusrv39, gpusrv46, gpusrv28
+    array_parallelism: 10

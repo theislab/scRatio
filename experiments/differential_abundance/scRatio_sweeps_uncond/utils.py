@@ -7,8 +7,6 @@ from torch import nn
 
 from scFM_density_estimation.models import *
 
-
-
 def sinusoidal_time_features(t: torch.Tensor, 
                              num_freqs: int = 128, 
                              max_period: int = 10000):
@@ -68,8 +66,7 @@ class ConditionalFlowMatchingWithScore(L.LightningModule):
         lr: float = 1e-4,
         use_ot_sampler: bool = False,
         ot_method: str = "exact",
-        dropout: float = 0,
-        unconditional: bool = False
+        dropout: float = 0
     ):
         super().__init__()
         self.save_hyperparameters()
@@ -80,14 +77,10 @@ class ConditionalFlowMatchingWithScore(L.LightningModule):
             self.sinusoidal_feature_dim = 1
 
         self.data_encoder = Encoder(input_dim, encoder_hidden_dims, encoder_out_dim, dropout)
-        if not unconditional:
-            self.cond_encoders = nn.ModuleList([
-                Encoder(cond_dim, encoder_hidden_dims, encoder_out_dim_cond, dropout)
-                for cond_dim in cond_dims
-            ])
-        else: 
-            encoder_out_dim_cond = 0
-            
+        self.cond_encoders = nn.ModuleList([
+            Encoder(cond_dim, encoder_hidden_dims, encoder_out_dim_cond, dropout)
+            for cond_dim in cond_dims
+        ])
         self.vf_mlp = FlowMatchingMLP(encoder_out_dim + encoder_out_dim_cond * len(cond_dims) + self.sinusoidal_feature_dim, hidden_dims, input_dim, dropout)
         self.score_mlp = FlowMatchingMLP(encoder_out_dim + encoder_out_dim_cond * len(cond_dims) + self.sinusoidal_feature_dim, hidden_dims, input_dim, dropout)
         
@@ -100,7 +93,6 @@ class ConditionalFlowMatchingWithScore(L.LightningModule):
         self.use_ot_sampler = use_ot_sampler
         self.cond_dims = cond_dims
         self.lr = lr
-        self.unconditional = unconditional
 
         self.vf_losses = []
         self.score_losses = []
@@ -113,16 +105,14 @@ class ConditionalFlowMatchingWithScore(L.LightningModule):
 
         start = 0
         xc = self.data_encoder(x)
-        
-        if not self.unconditional:
-            for i, cond_dim in enumerate(self.cond_dims):
-                if use_conds[i]:
-                    cond_enc = self.cond_encoders[i](cond[:, start:(start + cond_dim)])
-                else:
-                    cond_enc = torch.zeros(xc.shape[0], self.encoder_out_dim_cond)
-                    
-                xc = torch.cat([xc, cond_enc], dim=1)
-                start += cond_dim
+        for i, cond_dim in enumerate(self.cond_dims):
+            if use_conds[i]:
+                cond_enc = self.cond_encoders[i](cond[:, start:(start + cond_dim)])
+            else:
+                cond_enc = torch.zeros(xc.shape[0], self.encoder_out_dim_cond).to(xc.device)
+                
+            xc = torch.cat([xc, cond_enc], dim=1)
+            start += cond_dim
 
         if self.use_sinusoidal_embeddings:
             xtc = torch.cat([xc, sinusoidal_time_features(t, self.sinusoidal_feature_dim)], dim=1)
@@ -213,34 +203,6 @@ class NODEWrapper_with_ratio_tvf_rl(torch.nn.Module):
         ut, score_u = self.model(x, t, self.cond_u)
         vt, score_v = self.model(x, t, self.cond_v)
         ft, _ = self.model(x, t, self.cond_f)
-        
-        correction_term_u = torch.linalg.vecdot(ft - ut, score_u)
-        correction_term_v = torch.linalg.vecdot(vt - ft, score_v)
-        dr = div + correction_term_u + correction_term_v
-        
-        return torch.cat([ft, dr[:, None]], dim=-1)
-
-class NODEWrapper_with_ratio_generic_models(torch.nn.Module):
-    def __init__(self, model_num, model_den, model_vf):
-        super().__init__()
-        self.model_den = model_den
-        self.model_num = model_num
-        self.model_vf = model_vf
-        self.div_fn, self.eps_fn = div_fn_hutch_trace, torch.randn_like
-
-    def forward(self, t, x, *args, **kwargs):
-        x = x[..., :-1]
-        
-        def vecfield(y):
-            ut, _ = self.model_num(y.unsqueeze(0), t, None)
-            vt, _ = self.model_den(y.unsqueeze(0), t, None)
-            return vt.squeeze() - ut.squeeze()
-            
-        div = torch.vmap(self.div_fn(vecfield))(x, self.eps_fn(x))
-        
-        ut, score_u = self.model_num(x, t, None)
-        vt, score_v = self.model_den(x, t, None)
-        ft, _ = self.model_vf(x, t, None)
         
         correction_term_u = torch.linalg.vecdot(ft - ut, score_u)
         correction_term_v = torch.linalg.vecdot(vt - ft, score_v)

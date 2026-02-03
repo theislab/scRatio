@@ -57,7 +57,7 @@ def compute_ratio(model, data_samples, cond, cond_dim, condition, control, batch
 
 def train_scratio(adata: sc.AnnData, scheduler_type: str, res_dir: Path, run_name: str):
     # Fix number of PCs
-    N_pcs = 10 
+    N_pcs = 20 
     
     # Observatoions and conditioning variables
     X = torch.from_numpy(adata.obsm["X_pca"][:, :N_pcs]).float().cuda()
@@ -82,7 +82,7 @@ def train_scratio(adata: sc.AnnData, scheduler_type: str, res_dir: Path, run_nam
     
     # Training setup 
     n_steps = 150_000
-    batch_size = 1024
+    batch_size = 512
 
     # Model initialization 
     model = ConditionalFlowMatchingWithScore(
