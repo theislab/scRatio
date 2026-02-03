@@ -108,8 +108,10 @@ def get_ct_and_batch_names(
     ohe_ct = OneHotEncoder().fit(adata_full.obs[[ct_key]])
     ohe_batch = OneHotEncoder().fit(adata_full.obs[[batch_key]])
     cond_dims = [adata_full.obs[ct_key].nunique(), adata_full.obs[batch_key].nunique()]
-    ct_vec = ohe_ct.inverse_transform(unique_conds[cond_id][:cond_dims[0]][None].detach().cpu().numpy())
-    batch_vec = ohe_batch.inverse_transform(unique_conds[cond_id][cond_dims[0]:][None].detach().cpu().numpy())
+    if isinstance(unique_conds, torch.Tensor):
+        unique_conds = unique_conds.detach().cpu().numpy()
+    ct_vec = ohe_ct.inverse_transform(unique_conds[cond_id][:cond_dims[0]][None])
+    batch_vec = ohe_batch.inverse_transform(unique_conds[cond_id][cond_dims[0]:][None])
     return ct_vec[0][0], batch_vec[0][0]
 
 
