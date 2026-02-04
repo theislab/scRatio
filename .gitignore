@@ -182,3 +182,6 @@ wandb/
 multirun/
 *_models/
 weights/
+checkpoints/
+table_results/
+sweep_results/
