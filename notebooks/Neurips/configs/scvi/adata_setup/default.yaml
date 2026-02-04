@@ -1,0 +1,7 @@
+hvgs_only: True
+layers_key: "X_counts"
+batch_key: "batch"
+labels_key: "cell_type"
+size_factor_key: null
+categorical_covariate_keys: null
+continuous_covariate_keys: null

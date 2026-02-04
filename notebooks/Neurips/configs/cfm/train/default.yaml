@@ -1,0 +1,2 @@
+n_steps: 100000
+batch_size: 1024

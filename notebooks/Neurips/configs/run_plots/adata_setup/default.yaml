@@ -1,0 +1,5 @@
+hvgs_only: True
+scvi_latent_key: "X_scvi"
+layers_key: "X_counts"
+batch_key: "batch"
+labels_key: "cell_type"
