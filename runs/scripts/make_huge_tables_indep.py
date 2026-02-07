@@ -1,11 +1,6 @@
 import torch
 import torch.nn.functional as F
-import matplotlib.pyplot as plt
 import numpy as np
-import scanpy as sc
-import anndata as ad
-import scipy as sp
-import pandas as pd
 import pickle
 import time
 import hydra
@@ -51,103 +46,6 @@ def prepare_dataset_dep(n, N, cond_dim, locs1, locs2, a, b):
     X_test = torch.tensor(X_test).to("cuda").float()
     C_test = F.one_hot(torch.tensor(C_test).long(), num_classes=cond_dim).reshape(-1, 2*cond_dim).to("cuda").float()
     return X_train, X_test, C_train, C_test
-
-class Encoder(nn.Module):
-    def __init__(self, cond_dim: int = 1, cond_hidden_dims: list = [],
-                 cond_out_dim: int = 2, dropout: float = 0):
-        super().__init__()
-        layers = []
-        prev_dim = cond_dim
-        for dim in cond_hidden_dims:
-            layers.extend([
-                nn.Linear(prev_dim, dim),
-                nn.SELU(),
-                nn.Dropout(dropout)
-            ])
-            prev_dim = dim
-
-        layers.append(nn.Linear(prev_dim, cond_out_dim))
-        self.encoder = nn.Sequential(*layers)
-
-    def forward(self, cond):
-        return self.encoder(cond)
-
-class ConditionalFlowMatchingWithScore(L.LightningModule):
-    def __init__(
-        self,
-        input_dim: int,
-        cond_dims: list,
-        hidden_dims: list,
-        encoder_hidden_dims: list,
-        encoder_out_dim: int,
-        lambda_t: Callable,
-        lambda_sp_t: Callable,
-        betas: list,
-        lr: float = 1e-3,
-        use_ot_sampler: bool = False,
-        ot_method: str = "exact",
-        dropout: float = 0
-    ):
-        super().__init__()
-        self.save_hyperparameters()
-
-        self.data_encoder = Encoder(input_dim, encoder_hidden_dims, encoder_out_dim, dropout)
-        self.cond_encoders = nn.ModuleList([
-            Encoder(cond_dim, encoder_hidden_dims, encoder_out_dim, dropout)
-            for cond_dim in cond_dims
-        ])
-        self.vf_mlp = FlowMatchingMLP(encoder_out_dim + 1, hidden_dims, input_dim, dropout)
-        self.score_mlp = FlowMatchingMLP(encoder_out_dim + 1, hidden_dims, input_dim, dropout)
-        
-        self.lambda_t = lambda_t
-        self.lambda_sp_t = lambda_sp_t
-
-        self.betas = betas
-        self.encoder_out_dim = encoder_out_dim
-        self.use_ot_sampler = use_ot_sampler
-        self.cond_dims = cond_dims
-        self.lr = lr
-
-    def forward(self, x, t, cond, use_conds):
-        if t.dim() == 0 or t.size()[0] == 1:
-            t = t.expand(x.shape[0]).unsqueeze(1)
-        elif t.dim() == 1:
-            t = t.unsqueeze(1)
-        
-        start = 0
-        xc = self.data_encoder(x)
-        for i, cond_dim in enumerate(self.cond_dims):
-            if use_conds[i]:
-                xc += self.cond_encoders[i](cond[:, start:(start + cond_dim)])
-            start += cond_dim
-        
-        xtc = torch.cat([xc, t], dim=1)
-        
-        vf = self.vf_mlp.mlp(xtc)
-        score = self.score_mlp.mlp(xtc)
-        
-        return vf, score
-
-    def shared_step(self, x1, cond):
-        device = x1.device
-
-        x0 = torch.randn_like(x1).to(device)
-        t = torch.rand(x1.shape[0]).unsqueeze(1).to(device)
-
-        xt = t * x1 + self.lambda_t(t) * x0
-        ut = x1 + self.lambda_sp_t(t) / self.lambda_t(t) * x0
-        c_t = self.lambda_t(t) ** 2 - self.lambda_sp_t(t) * t
-
-        use_conds = (np.random.uniform(size=len(self.betas)) >= np.array(self.betas))
-        pred_ut, pred_score = self(xt, t, cond, use_conds)
-        
-        vf_loss = F.mse_loss(pred_ut, ut)
-        score_loss = F.mse_loss(c_t * pred_score, t * ut - xt)
-
-        return vf_loss + score_loss
-
-    def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=self.lr)
 
 def div_fn_hutch_trace_with_cond(u):
     def div_fn(x, cond, eps):
@@ -381,7 +279,7 @@ def main(cfg: DictConfig):
     results["X"] = X_test
     results["C"] = C_test
 
-    with open(f"/home/icb/egor.antipov/scFM_density_estimation/notebooks/tests/table_results/{cfg.run_type}_results_indep_test.pkl", "wb") as f:
+    with open(f"./notebooks/tests/table_results/{cfg.run_type}_results_indep_test.pkl", "wb") as f:
         pickle.dump(results, f)
 
     print("FINISHED")  

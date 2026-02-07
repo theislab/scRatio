@@ -1,36 +1,7 @@
 model:
-  hidden_dims: [1024, 1024, 1024, 1024]
-  cond_hidden_dims: [16]
-  cond_out_dim: 8
-  use_encoder: false
-  use_ot_sampler: false
-  ot_method: "exact"
-  dropout: 0
-
-datamodule:
-  train_batch_size: 4096
-  val_batch_size: 30000
-  test_batch_size: 60000
-  adata_path: "/lustre/groups/ml01/projects/inverse_perturbation_models/datasets/pbmc/adata_for_cellflow_datasets_with_embeddings_and_200PCs.h5ad"
-  conditions: ["cytokine"]
-  num_conditions: 1
-  condition_dims: [91]
-  probability: 0
-  index: 0
-  num_pcs: 200
-  num_workers: 4
-  val_split: 0.03
-  test_split: 0.02
-  train_sample_size: 1e10
-
-training:
-  lr: 1e-3
-  log_every_n_steps: 1e3
-  val_check_interval: 1e4
-  max_steps: 5e5
-  output_dir: ./outputs/weights
-  save_checkpoint: true
-
-logger:
-  project: "scfm_density_estimation"
-  name: "scfm_run_${datamodule.conditions}_${model.hidden_dims}_${datamodule.num_pcs}_${datamodule.train_batch_size}"
+  input_dim: 5
+  cond_dims: [4, 4]
+  hidden_dims: [1024, 1024, 1024]
+  encoder_hidden_dims: [256]
+  encoder_out_dim: 50
+  betas: [0.2, 0.2]

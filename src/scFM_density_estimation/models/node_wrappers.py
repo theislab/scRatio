@@ -1,9 +1,6 @@
 import torch
 
 class NODEWrapper(torch.nn.Module):
-    """
-    Wraps model to torchdyn compatible format.
-    """
     def __init__(self, model, cond, **kwargs):
         super().__init__()
         self.model = model
@@ -11,10 +8,10 @@ class NODEWrapper(torch.nn.Module):
         self.kwargs = kwargs
 
     def forward(self, t, x, *args, **kwargs):
-        return self.model(x, t, self.cond, **self.kwargs)
+        vf, _ = self.model(x, t, self.cond, **self.kwargs)
+        return vf
     
 def exact_div_fn(u):
-    """Accepts a function u:R^D -> R^D."""
     J = torch.func.jacrev(u)
     return lambda x, *args: torch.trace(J(x))
 
@@ -42,9 +39,6 @@ def get_div_and_eps(likelihood_estimator):
     )
 
 class NODEWrapper_with_trace_div(torch.nn.Module):
-    """
-    Wraps model to torchdyn compatible format with trace of the Jacobian.
-    """
     def __init__(self, model, condition, likelihood_estimator="exact"):
         super().__init__()
         self.model = model
@@ -55,43 +49,16 @@ class NODEWrapper_with_trace_div(torch.nn.Module):
         x = x[..., :-1]
         
         def vecfield(y):
-            return self.model(y.unsqueeze(0), t, self.cond[:1]).squeeze()
+            vf, _ = self.model(y.unsqueeze(0), t, self.cond[:1])
+            return vf.squeeze()
 
         if self.eps_fn is None:
             div = torch.vmap(self.div_fn(vecfield))(x)
         else:
             div = torch.vmap(self.div_fn(vecfield))(x, self.eps_fn(x))
-        dx = self.model(x, t, self.cond)
+
+        dx, _ = self.model(x, t, self.cond)
         return torch.cat([dx, div[:, None]], dim=-1)
-    
-class NODEWrapper_with_ratio(torch.nn.Module):
-    def __init__(self, model, condition, control, likelihood_estimator="exact"):
-        super().__init__()
-        self.model = model
-        self.cond_v = control
-        self.cond_u = condition
-        self.div_fn, self.eps_fn = get_div_and_eps(likelihood_estimator)
-
-    def forward(self, t, x, *args, **kwargs):
-        x = x[..., :-1]
-        
-        def vecfield(y):
-            return self.model(y.unsqueeze(0), t, self.cond_v[:1]).squeeze() \
-            - self.model(y.unsqueeze(0), t, self.cond_u[:1]).squeeze()
-        
-        if self.eps_fn is None:
-            div = torch.vmap(self.div_fn(vecfield))(x)
-        else:
-            div = torch.vmap(self.div_fn(vecfield))(x, self.eps_fn(x))
-            
-        ut = self.model(x, t, self.cond_u)
-        vt = self.model(x, t, self.cond_v)
-        
-        score = (t * vt - x) / (1 - t + 1e-8)
-        correction_term = torch.linalg.vecdot(vt - ut, score)
-        dr = div + correction_term
-        
-        return torch.cat([ut, dr[:, None]], dim=-1)
     
 class NODEWrapper_with_ratio_tvf(torch.nn.Module):
     def __init__(self, model, condition, control, point, likelihood_estimator="exact"):
@@ -106,24 +73,21 @@ class NODEWrapper_with_ratio_tvf(torch.nn.Module):
         x = x[..., :-1]
         
         def vecfield(y):
-            return self.model(y.unsqueeze(0), t, self.cond_v[:1]).squeeze() \
-            - self.model(y.unsqueeze(0), t, self.cond_u[:1]).squeeze()
-        
+            ut, _ = self.model(y.unsqueeze(0), t, self.cond_u[:1])
+            vt, _ = self.model(y.unsqueeze(0), t, self.cond_v[:1])
+            return vt.squeeze() - ut.squeeze()
+            
         if self.eps_fn is None:
             div = torch.vmap(self.div_fn(vecfield))(x)
         else:
             div = torch.vmap(self.div_fn(vecfield))(x, self.eps_fn(x))
-            
-        ut = self.model(x, t, self.cond_u)
-        vt = self.model(x, t, self.cond_v)
-        ft = self.model(x, t, self.cond_f)
         
-        score_u = (t * ut - x) / (1 - t + 1e-8)
+        ut, score_u = self.model(x, t, self.cond_u)
+        vt, score_v = self.model(x, t, self.cond_v)
+        ft, _ = self.model(x, t, self.cond_f)
+        
         correction_term_u = torch.linalg.vecdot(ft - ut, score_u)
-        
-        score_v = (t * vt - x) / (1 - t + 1e-8)
         correction_term_v = torch.linalg.vecdot(vt - ft, score_v)
-        
         dr = div + correction_term_u + correction_term_v
         
         return torch.cat([ft, dr[:, None]], dim=-1)
