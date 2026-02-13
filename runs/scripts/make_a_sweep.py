@@ -1,16 +1,18 @@
-import torch
-import torch.nn.functional as F
+import hydra
+import lightning as L
 import numpy as np
 import pickle
 import time
-import hydra
+import torch
+import torch.nn.functional as F
 
-from typing import Optional, Callable
 from omegaconf import DictConfig
-from tqdm import tqdm
-from scFM_density_estimation.models import *
-from scFM_density_estimation.node_wrappers import *
 from sklearn.model_selection import train_test_split
+from torch.utils.data import DataLoader
+from tqdm import tqdm
+
+from scRatio.datamodules import ArrayDataset
+from scRatio.models import *
 
 def prepare_dataset(n, N, cond_dim, locs):
     C = np.random.randint(low=0, high=cond_dim, size=(N))
@@ -25,20 +27,12 @@ def prepare_dataset(n, N, cond_dim, locs):
     C_test = F.one_hot(torch.tensor(C_test).long(), num_classes=cond_dim).to("cuda").float()
     return X_train, X_test, C_train, C_test
 
-def train(batch_size, n_steps, model, optimizer, X, C):
-    for k in range(n_steps):
-        optimizer.zero_grad()
-    
-        indices = np.random.choice(range(X.shape[0]), size=batch_size, replace=False)
-        loss = model.shared_step(X[indices], C[indices])
-        
-        loss.backward()
-        optimizer.step()
-    return model
+def build_train_loader(X_train, C_train, batch_size):
+    dataset = ArrayDataset(X_train, C_train)
+    return DataLoader(dataset, batch_size=batch_size, shuffle=True, drop_last=True)
 
-def evaluate_model(model, data_samples, cond, cond_dim, condition, control, locs):
-    device = data_samples.device
-    
+def evaluate_model(model, data_samples, cond, cond_dim, condition, control, locs):    
+    # ground truth
     start_true = time.time()
 
     log_condition_true = -0.5 * ((data_samples.cpu().numpy() - np.array(locs[np.argmax(condition)])) ** 2).sum(axis=1) - 0.5 * data_samples.shape[1] * np.log(2 * np.pi)
@@ -47,56 +41,20 @@ def evaluate_model(model, data_samples, cond, cond_dim, condition, control, locs
     
     time_true = time.time() - start_true
     
+    # naive evaluation
     start_hat = time.time()
 
-    # naive evaluation
-    node = NeuralODE(
-        NODEWrapper_with_trace_div(model, torch.tensor(condition).float().expand(data_samples.shape[0], cond_dim).to(device)),
-        solver="dopri5", sensitivity="adjoint", atol=1e-4, rtol=1e-4
-    )
-    
-    with torch.no_grad():
-        traj = node.trajectory(
-            torch.cat([data_samples, torch.zeros(data_samples.shape[0], 1).to(device)], dim=-1),
-            t_span=torch.linspace(1, 0, 100).to(device)
-        )
-    z0, div = traj[-1][:, :-1], traj[-1][:, -1]
-    log_condition_hat = (-0.5 * (z0 ** 2).sum(dim=1) - 0.5 * z0.shape[1] * np.log(2 * np.pi) + div).cpu().numpy()
-    
-    node = NeuralODE(
-        NODEWrapper_with_trace_div(model, torch.tensor(control).float().expand(data_samples.shape[0], cond_dim).to(device)),
-        solver="dopri5", sensitivity="adjoint", atol=1e-4, rtol=1e-4
-    )
-    
-    with torch.no_grad():
-        traj = node.trajectory(
-            torch.cat([data_samples, torch.zeros(data_samples.shape[0], 1).to(device)], dim=-1),
-            t_span=torch.linspace(1, 0, 100).to(device)
-        )
-    z0, div = traj[-1][:, :-1], traj[-1][:, -1]
-    log_control_hat = (-0.5 * (z0 ** 2).sum(dim=1) - 0.5 * z0.shape[1] * np.log(2 * np.pi) + div).cpu().numpy()
-    
+    log_condition_hat = model.estimate_log_density(data_samples, condition, n_steps=100)
+    log_control_hat = model.estimate_log_density(data_samples, control, n_steps=100)
     log_ratio_hat = log_condition_hat - log_control_hat
     
     time_hat = time.time() - start_hat
 
+    # correction term - its own field
     start_hat_v2 = time.time()
 
-    # correction term - its own field
-    node = NeuralODE(
-        NODEWrapper_with_ratio_tvf(model, control=torch.tensor(control).float().expand(data_samples.shape[0], cond_dim).to(device),
-            condition=torch.tensor(condition).float().expand(data_samples.shape[0], cond_dim).to(device), point=cond),
-        solver="dopri5", sensitivity="adjoint", atol=1e-4, rtol=1e-4
-    )
-    
-    with torch.no_grad():
-        traj = node.trajectory(
-            torch.cat([data_samples, torch.zeros(data_samples.shape[0], 1).to(device)], dim=-1),
-            t_span=torch.linspace(1, 0, 100).to(device)
-        )
-    z0, ratio = traj[-1][:, :-1], traj[-1][:, -1]
-    log_ratio_hat_v2 = -ratio.cpu().numpy()
-    
+    log_ratio_hat_v2 = model.estimate_log_density_ratio(data_samples, condition, control, cond, n_steps=100)
+
     time_hat_v2 = time.time() - start_hat_v2
     
     return [log_ratio_true, log_ratio_hat, log_ratio_hat_v2], [time_true, time_hat, time_hat_v2]
@@ -179,10 +137,19 @@ def main(cfg: DictConfig):
                     lr=cfg.lr,
                     time_feature_dim=time_feature_dim,
                     encoder_out_dim_cond=cfg.cond_latent_dim,
-                ).to("cuda")
-                optimizer = model.configure_optimizers()
-                
-                model = train(batch_size, n_steps, model, optimizer, X_train, C_train)
+                )
+
+                train_loader = build_train_loader(X_train, C_train, batch_size)
+                trainer = L.Trainer(
+                    accelerator="gpu" if torch.cuda.is_available() else "cpu",
+                    devices=1,
+                    max_steps=n_steps,
+                    logger=False,
+                    enable_checkpointing=False,
+                    enable_progress_bar=True,
+                )
+                trainer.fit(model, train_dataloaders=train_loader)
+
                 log_ratios, times = evaluate_model(model, X_test, C_test, cond_dim, condition, control, locs)
 
                 for i, name in enumerate(names):

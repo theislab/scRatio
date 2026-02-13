@@ -176,9 +176,6 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 
-# data folder
-data/
-
 # custom folders
 outputs/
 wandb/
@@ -188,3 +185,6 @@ weights/
 checkpoints/
 table_results/
 sweep_results/
+
+# h5ad files
+*.h5ad
