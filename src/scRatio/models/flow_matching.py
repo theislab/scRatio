@@ -235,3 +235,4 @@ class ConditionalFlowMatchingWithScore(L.LightningModule):
         log_ratio = traj[-1, :, -1]
         
         return -log_ratio.cpu().numpy()
+    
