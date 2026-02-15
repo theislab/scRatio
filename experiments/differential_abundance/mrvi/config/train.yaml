@@ -4,3 +4,4 @@
 defaults:
   - _self_
   - paths: default
+  - hydra: default
