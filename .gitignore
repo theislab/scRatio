@@ -188,3 +188,6 @@ sweep_results/
 
 # h5ad files
 *.h5ad
+
+# Symlink to project folder 
+project_folder
