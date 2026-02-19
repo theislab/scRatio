@@ -113,7 +113,7 @@ def train_scratio(adata: sc.AnnData, scheduler_type: str, res_dir: Path, run_nam
     run_dir.mkdir(parents=True, exist_ok=True)
     adata.write_h5ad(run_dir / f"{run_name}.h5ad") 
 
-@hydra.main(config_path="/home/icb/alessandro.palma/environment/scFM_density_estimation/experiments/differential_abundance/scRatio/config", config_name="train", version_base=None)
+@hydra.main(config_path="./config", config_name="train", version_base=None)
 def main(config: DictConfig):
     # Initialize directiories and adata path 
     res_dir = Path(config.paths.res_dir)  

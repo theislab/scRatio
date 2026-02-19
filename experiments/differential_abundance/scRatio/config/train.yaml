@@ -5,3 +5,4 @@ defaults:
   - _self_
   - paths: default
   - scheduler: default
+  - hydra: default

@@ -180,6 +180,7 @@ cython_debug/
 outputs/
 wandb/
 multirun/
+lightning_logs/
 *_models/
 weights/
 checkpoints/

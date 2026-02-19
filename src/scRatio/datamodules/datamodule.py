@@ -142,7 +142,7 @@ class AnnDataDataModule(L.LightningDataModule):
             Optional[DataLoader]: Validation loader or None.
         """
         if self.val_dataset is None:
-            return None
+            return []
         return DataLoader(
             self.val_dataset,
             batch_size=self.val_batch_size,
@@ -161,7 +161,7 @@ class AnnDataDataModule(L.LightningDataModule):
             Optional[DataLoader]: Test loader or None.
         """
         if self.test_dataset is None:
-            return None
+            return []
         return DataLoader(
             self.test_dataset,
             batch_size=self.test_batch_size,
