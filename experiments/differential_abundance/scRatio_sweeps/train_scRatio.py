@@ -1,96 +1,21 @@
-import sys
-import traceback
 from pathlib import Path
+from tqdm import tqdm
+import traceback
+import sys
 import numpy as np
 import scanpy as sc
 import torch
-from torch.utils.data import DataLoader, TensorDataset
-import lightning as L
-from torchdyn.core import NeuralODE
-from sklearn.preprocessing import OneHotEncoder
+from lightning import Trainer
 import hydra
 from omegaconf import DictConfig
-from tqdm.auto import tqdm
-from utils import *
+from sklearn.preprocessing import OneHotEncoder
+from scRatio.models.flow_matching import ConditionalFlowMatchingWithScore
+
+import sys 
+sys.path.insert(0, "..")
+from utils_scratio import train
 
 torch.set_float32_matmul_precision("medium")
-
-def train(batch_size, n_steps, model, optimizer, X, C):
-    for k in tqdm(range(n_steps)):
-        optimizer.zero_grad()
-    
-        indices = np.random.choice(range(X.shape[0]), size=batch_size, replace=False)
-        loss = model.shared_step(X[indices], C[indices], k)
-        
-        loss.backward()
-        optimizer.step()
-    return model
-
-def compute_ratio(model, data_samples, cond, cond_dim, condition, control, batch_size):
-    # Initialize the device 
-    device = data_samples.device   
-
-    # Initialize torch dataloader to iterate through the samples 
-    dataloader = DataLoader(TensorDataset(data_samples, cond), 
-                            batch_size=batch_size, 
-                            drop_last=False, 
-                            shuffle=False)
-    
-    # Initialize log-ratio dict
-    log_ratios_dict = {"dopri": []}
-    
-    for batch in tqdm(dataloader):
-        X_batch = batch[0]
-        C_batch = batch[1]
-        
-        control_tensor = torch.tensor(control).float().expand(X_batch.shape[0], cond_dim).to(device)
-        condition_tensor = torch.tensor(condition).float().expand(X_batch.shape[0], cond_dim).to(device)
-
-        # correction term - its own field
-        node_dopri = NeuralODE(
-            NODEWrapper_with_ratio_tvf_rl(model, control=control_tensor,
-                condition=condition_tensor, point=C_batch),
-            solver="dopri5", sensitivity="adjoint", atol=1e-4, rtol=1e-4
-        )
-        
-        # node_euler = NeuralODE(
-        #     NODEWrapper_with_ratio_tvf_rl(model, control=control_tensor,
-        #         condition=condition_tensor, point=C_batch),
-        #     solver="euler", sensitivity="adjoint", atol=1e-4, rtol=1e-4
-        # )
-        
-        with torch.no_grad():
-            # Dopri simulation
-            traj = node_dopri.trajectory(
-                torch.cat([X_batch, torch.zeros(X_batch.shape[0], 1).to(device)], dim=-1),
-                t_span=torch.linspace(1, 0, 2).to(device)
-            )            
-            _, ratio = traj[-1][:, :-1], traj[-1][:, -1]
-            log_ratio_hat = -ratio.cpu().numpy()
-            log_ratios_dict["dopri"].append(log_ratio_hat)
-            
-            # # Euler simulation 100
-            # traj = node_euler.trajectory(
-            #     torch.cat([X_batch, torch.zeros(X_batch.shape[0], 1).to(device)], dim=-1),
-            #     t_span=torch.linspace(1, 0, 100).to(device)
-            # )            
-            # _, ratio = traj[-1][:, :-1], traj[-1][:, -1]
-            # log_ratio_hat = -ratio.cpu().numpy()
-            # log_ratios_dict["euler_100"].append(log_ratio_hat)
-            
-            # # Euler simulation 200
-            # traj = node_euler.trajectory(
-            #     torch.cat([X_batch, torch.zeros(X_batch.shape[0], 1).to(device)], dim=-1),
-            #     t_span=torch.linspace(1, 0, 200).to(device)
-            # )            
-            # _, ratio = traj[-1][:, :-1], traj[-1][:, -1]
-            # log_ratio_hat = -ratio.cpu().numpy()
-            # log_ratios_dict["euler_200"].append(log_ratio_hat)            
-        
-    log_ratios_dict["dopri"] = np.concatenate(log_ratios_dict["dopri"])
-    # log_ratios_dict["euler_100"] = np.concatenate(log_ratios_dict["euler_100"])
-    # log_ratios_dict["euler_200"] = np.concatenate(log_ratios_dict["euler_200"])
-    return log_ratios_dict
 
 def train_scratio(adata: sc.AnnData,
                   dimensions: int,  
@@ -100,13 +25,16 @@ def train_scratio(adata: sc.AnnData,
                   res_dir: Path, 
                   run_name: str):
     
+    # Initialize device 
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    
     # Fix number of PCs
     N_pcs = dimensions
     
     # Observatoions and conditioning variables
-    X = torch.from_numpy(adata.obsm["X_pca"][:, :N_pcs]).float().cuda()
+    X = torch.from_numpy(adata.obsm["X_pca"][:, :N_pcs]).float().to(device)
     C = OneHotEncoder().fit_transform(adata.obs[["treatment"]]).toarray()
-    C = torch.from_numpy(C).float().cuda()
+    C = torch.from_numpy(C).float().to(device)
     
     # Train a very deterministic flow 
     if scheduler_type == "deterministic":
@@ -136,30 +64,46 @@ def train_scratio(adata: sc.AnnData,
         hidden_dims=[1024, 1024, 1024],
         encoder_hidden_dims=[256],
         encoder_out_dim=256,
-        encoder_out_dim_cond=50,
-        use_sinusoidal_embeddings=True,
-        sinusoidal_feature_dim=50,
+        encoder_out_dim_cond=50, 
+        time_feature_dim=50, 
         lambda_t=lambda_t,
         lambda_sp_t=lambda_sp_t,
-        betas=[0], 
-        lr=1e-4
-    ).to("cuda")
+        betas=[0],
+        lr = 1e-4,
+        dropout = 0).to(device)
     
     optimizer = model.configure_optimizers()
     model = train(batch_size, n_steps, model, optimizer, X, C)
     
-    # Compute ratio
-    control = np.array([1, 0])
-    condition = np.array([0, 1])
-    log_ratio = compute_ratio(model, X, C, 2, condition, control, batch_size=1000)
-    adata.obs["log_ratios"] = log_ratio["dopri"]
-    # adata.obs["log_ratios_euler_100"] = log_ratio["euler_100"]
-    # adata.obs["log_ratios_euler_200"] = log_ratio["euler_200"]
+    # Annotate AnnData 
+    from torch.utils.data import DataLoader, TensorDataset
+    # Control and condition labels
+    control = np.array([1., 0.])
+    condition = np.array([0., 1.])
+    # Create dataloader to estimate the ratio 
+    dataloader_ratio = DataLoader(TensorDataset(X, C), 
+                                  batch_size=1000, 
+                                  drop_last=False)
+    
+    lik_ratios_data = []
+    with torch.no_grad():
+        for batch in tqdm(dataloader_ratio):
+            X_batch = batch[0]
+            C_batch = batch[1]
+            ratios = model.estimate_log_density_ratio(data_samples=X_batch, 
+                                                        control=control.unsqueeze(0).repeat(X_batch.shape[0], 1), 
+                                                        condition=condition.unsqueeze(0).repeat(X_batch.shape[0], 1), 
+                                                        point=C_batch, 
+                                                        n_steps=2)
+            lik_ratios_data.append(ratios)
+    
+    lik_ratios_data = np.concatenate(lik_ratios_data)
+    adata.obs["log_ratios"] = lik_ratios_data 
     
     # Save results 
     adata.obs.to_csv(res_dir / f"{run_name}.csv") 
 
-@hydra.main(config_path="/home/icb/alessandro.palma/environment/scFM_density_estimation/experiments/differential_abundance/scRatio_sweeps/config", config_name="train", version_base=None)
+@hydra.main(config_path="./config", config_name="train", version_base=None)
 def main(config: DictConfig):
     # Read AnnData
     adata_path = Path(config.hparams.adata_path)  # Gonna be an AnnData path with certain oversampling rate 
