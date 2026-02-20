@@ -2,6 +2,8 @@ from tqdm import tqdm
 import numpy as np 
 
 def train(batch_size, n_steps, model, optimizer, X, C):
+    """Standard training loop for scRatio 
+    """
     for k in tqdm(range(n_steps)):
         optimizer.zero_grad()
     

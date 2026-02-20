@@ -9,7 +9,6 @@ from lightning import Trainer
 import hydra
 from omegaconf import DictConfig
 from sklearn.preprocessing import OneHotEncoder
-from scRatio.datamodules.datamodule import AnnDataDataModule
 from scRatio.models.flow_matching import ConditionalFlowMatchingWithScore
 
 import sys 
@@ -19,6 +18,7 @@ from utils_scratio import train
 torch.set_float32_matmul_precision("medium")
 
 def train_scratio(adata: sc.AnnData, scheduler_type: str, res_dir: Path, run_name: str):
+    
     # Initialize device 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     
@@ -120,7 +120,10 @@ def main(config: DictConfig):
     for i in range(3):
         run_name = f"oversamp_{tag}_{i}"
         adata = base_adata.copy()
-        train_scratio(adata, scheduler_type, res_dir, run_name)
+        train_scratio(adata, 
+                      scheduler_type,
+                      res_dir, 
+                      run_name)
     
 if __name__ == "__main__":
     # running the experiment
