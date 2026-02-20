@@ -5,6 +5,7 @@ import pickle
 import time
 import torch
 import torch.nn.functional as F
+import os
 
 from omegaconf import DictConfig
 from sklearn.model_selection import train_test_split
@@ -31,7 +32,10 @@ def build_train_loader(X_train, C_train, batch_size):
     dataset = ArrayDataset(X_train, C_train)
     return DataLoader(dataset, batch_size=batch_size, shuffle=True, drop_last=True)
 
-def evaluate_model(model, data_samples, cond, cond_dim, condition, control, locs):    
+def evaluate_model(model, data_samples, cond, cond_dim, condition, control, locs):
+    device = data_samples.device
+    model = model.to(device)
+
     # ground truth
     start_true = time.time()
 
@@ -40,6 +44,9 @@ def evaluate_model(model, data_samples, cond, cond_dim, condition, control, locs
     log_ratio_true = log_condition_true - log_control_true
     
     time_true = time.time() - start_true
+
+    condition = torch.from_numpy(condition).float().to(device).expand(data_samples.shape[0], cond_dim)
+    control = torch.from_numpy(control).float().to(device).expand(data_samples.shape[0], cond_dim)
     
     # naive evaluation
     start_hat = time.time()
@@ -62,6 +69,7 @@ def evaluate_model(model, data_samples, cond, cond_dim, condition, control, locs
 @hydra.main(config_path="../configs", config_name="base", version_base=None)
 def main(cfg: DictConfig):
     np.random.seed(42)
+    os.makedirs("./runs/scripts/checkpoints/", exist_ok=True)
 
     n = cfg.num_dims
     N = 100_000
@@ -146,7 +154,7 @@ def main(cfg: DictConfig):
                     max_steps=n_steps,
                     logger=False,
                     enable_checkpointing=False,
-                    enable_progress_bar=True,
+                    enable_progress_bar=False,
                 )
                 trainer.fit(model, train_dataloaders=train_loader)
 

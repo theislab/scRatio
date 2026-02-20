@@ -144,18 +144,22 @@ class AnnDataDataModule(L.LightningDataModule):
         encoded_parts = []
         condition_dims: List[int] = []
         condition_categories: List[List[str]] = []
+        encoders = []
 
         for key in self.conditions:
             if key not in adata.obs:
                 raise KeyError(f"Condition '{key}' not found in adata.obs")
             encoder = _make_one_hot_encoder()
-            encoded = encoder.fit_transform(adata.obs[[key]])
+            values = adata.obs[key].astype(str).values.reshape(-1, 1)
+            encoded = encoder.fit_transform(values)
             encoded_parts.append(encoded)
             condition_dims.append(encoded.shape[1])
             condition_categories.append([str(c) for c in encoder.categories_[0]])
+            encoders.append(encoder)
 
         self.condition_dims = condition_dims
         self.condition_categories = condition_categories
+        self.encoders = encoders
         return np.concatenate(encoded_parts, axis=1)
 
     def _split_indices(self, n_samples: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
