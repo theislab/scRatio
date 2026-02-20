@@ -18,4 +18,4 @@ export HYDRA_FULL_ERROR=1;
 cd ..
 
 # python train_scRatio.py --multirun +hparams_search=default +launcher=slurm
-python train_uncond.py --multirun +hparams_search=default +launcher=slurm
+# python train_uncond.py --multirun +hparams_search=default +launcher=slurm
