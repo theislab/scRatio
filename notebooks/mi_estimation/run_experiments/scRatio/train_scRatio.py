@@ -2,18 +2,20 @@ import sys
 import traceback
 from pathlib import Path
 import numpy as np
-import scanpy as sc
 import torch
 from torch.utils.data import DataLoader, TensorDataset
-import lightning as L
 from torchdyn.core import NeuralODE
-from sklearn.preprocessing import OneHotEncoder
 import hydra
 from omegaconf import DictConfig
-from tqdm.auto import tqdm
-sys.path.insert(0, "/home/icb/alessandro.palma/environment/scFM_density_estimation/notebooks/differential_abundance_analysis/")
-from utils import *
+from tqdm import tqdm
+from scRatio.models.flow_matching import ConditionalFlowMatchingWithScore
+from utils import NODEWrapper_with_ratio_generic_models
 
+
+sys.path.insert(0, "../../../../experiments/differential_abundance/")
+from utils_scratio import train
+
+# Steps specific for each dimensionality
 N_STEPS = {20: 100_000, 
            40: 100_000,
            80: 100_000,
@@ -25,49 +27,6 @@ BATCH_SIZES = {20: 512,
                 80: 512,
                 160: 512,
                 320: 256}
-
-def train(batch_size, n_steps, model, optimizer, X, C):
-    for k in tqdm(range(n_steps)):
-        optimizer.zero_grad()
-    
-        indices = np.random.choice(range(X.shape[0]), size=batch_size, replace=False)
-        
-        # Only consider C if the indices exist 
-        if C:
-            C = C[indices]
-        
-        loss = model.shared_step(X[indices], C, k)
-        loss.backward()
-        optimizer.step()
-    return model
-
-class NODEWrapper_with_ratio_generic_models(torch.nn.Module):
-    def __init__(self, model_num, model_den, model_vf):
-        super().__init__()
-        self.model_den = model_den
-        self.model_num = model_num
-        self.model_vf = model_vf
-        self.div_fn, self.eps_fn = div_fn_hutch_trace, torch.randn_like
-
-    def forward(self, t, x, *args, **kwargs):
-        x = x[..., :-1]
-        
-        def vecfield(y):
-            ut, _ = self.model_num(y.unsqueeze(0), t, None)
-            vt, _ = self.model_den(y.unsqueeze(0), t, None)
-            return vt.squeeze() - ut.squeeze()
-            
-        div = torch.vmap(self.div_fn(vecfield))(x, self.eps_fn(x))
-        
-        ut, score_u = self.model_num(x, t, None)
-        vt, score_v = self.model_den(x, t, None)
-        ft, _ = self.model_vf(x, t, None)
-        
-        correction_term_u = torch.linalg.vecdot(ft - ut, score_u)
-        correction_term_v = torch.linalg.vecdot(vt - ft, score_v)
-        dr = div + correction_term_u + correction_term_v
-        
-        return torch.cat([ft, dr[:, None]], dim=-1)
     
 def compute_ratio(data_samples, model_num, model_den, batch_size):
     # Initialize the device 
@@ -81,7 +40,9 @@ def compute_ratio(data_samples, model_num, model_den, batch_size):
         
         # correction term - its own field
         node = NeuralODE(
-            NODEWrapper_with_ratio_generic_models(model_num, model_den, model_num),
+            NODEWrapper_with_ratio_generic_models(model_num, 
+                                                  model_den, 
+                                                  model_num),
             solver="dopri5", sensitivity="adjoint", atol=1e-4, rtol=1e-4
         )
         
@@ -97,7 +58,8 @@ def compute_ratio(data_samples, model_num, model_den, batch_size):
     return np.concatenate(log_ratios)
 
 def train_scratio(X_block_train, X_prior_train, X_block_test, X_prior_test, scheduler_type, sigma):
-    # We'll get sigma from the data    
+       
+    # Initialize scheduler 
     if scheduler_type == "deterministic":
         sigma = 0
         sigma_min = 0
@@ -117,8 +79,10 @@ def train_scratio(X_block_train, X_prior_train, X_block_test, X_prior_test, sche
     # Training setup
     models = {"model_prior": None, 
               "model_block": None}
+    
     X_trains = {"model_prior": X_prior_train, 
                 "model_block": X_block_train}
+    
     X_test = {"model_prior": X_prior_test, 
                 "model_block": X_block_test}
     
@@ -133,22 +97,24 @@ def train_scratio(X_block_train, X_prior_train, X_block_test, X_prior_test, sche
                                                             encoder_hidden_dims=[256],
                                                             encoder_out_dim=256,
                                                             encoder_out_dim_cond=50,
-                                                            use_sinusoidal_embeddings=True,
-                                                            sinusoidal_feature_dim=50,
+                                                            time_feature_dim=50,
                                                             lambda_t=lambda_t,
                                                             lambda_sp_t=lambda_sp_t,
                                                             betas=[1], 
                                                             lr=1e-4, 
-                                                            unconditional=True
+                                                            dropout = 0
                                                         ).to("cuda")
     
         optimizer = models[model].configure_optimizers()
         model = train(batch_size, n_steps, models[model], optimizer, X_trains[model], None)
     
-    ratio_estimations = compute_ratio(X_test["model_block"], models["model_block"], models["model_prior"], 1000)
+    ratio_estimations = compute_ratio(X_test["model_block"],
+                                      models["model_block"], 
+                                      models["model_prior"], 
+                                      1000)
     return ratio_estimations
 
-@hydra.main(config_path="/home/icb/alessandro.palma/environment/scFM_density_estimation/notebooks/mi_estimation/run_experiments/scRatio/config", config_name="train", version_base=None)
+@hydra.main(config_path="./config", config_name="train", version_base=None)
 def main(config: DictConfig):
     # Initialize directiories and adata path 
     res_dir = Path(config.paths.res_dir) 
