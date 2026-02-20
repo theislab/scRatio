@@ -339,7 +339,7 @@ class ConditionalFlowMatchingWithScore(L.LightningModule):
         """
         return torch.optim.Adam(self.parameters(), lr=self.lr)
     
-    def get_node(self, condition, control=None, point=None, node_type="simulation", estimator_type="exact"):
+    def get_node(self, condition, control=None, point=None, node_type="simulation", estimator_type="exact", solver="dopri"):
         """
         Construct Neural ODE wrapper.
 
@@ -354,16 +354,16 @@ class ConditionalFlowMatchingWithScore(L.LightningModule):
             NeuralODE: Configured Neural ODE instance.
         """
         if node_type == "simulation":
-            return NeuralODE(NODEWrapper(self, condition), solver="dopri5",
+            return NeuralODE(NODEWrapper(self, condition), solver=solver,
                               sensitivity="adjoint", atol=1e-4, rtol=1e-4)
         elif node_type == "density":
-            return NeuralODE(NODEWrapper_with_trace_div(self, condition, estimator_type), solver="dopri5",
+            return NeuralODE(NODEWrapper_with_trace_div(self, condition, estimator_type), solver=solver,
                               sensitivity="adjoint", atol=1e-4, rtol=1e-4)
         elif node_type == "ratio":
-            return NeuralODE(NODEWrapper_with_ratio_tvf(self, condition, control, point, estimator_type), solver="dopri5",
+            return NeuralODE(NODEWrapper_with_ratio_tvf(self, condition, control, point, estimator_type), solver=solver,
                               sensitivity="adjoint", atol=1e-4, rtol=1e-4)
         
-    def run_simulation(self, data_samples, condition, n_steps=100):
+    def run_simulation(self, data_samples, condition, n_steps=100, solver="dopri5"):
         """
         Run forward ODE simulation.
 
@@ -376,7 +376,7 @@ class ConditionalFlowMatchingWithScore(L.LightningModule):
             torch.Tensor: Simulated samples.
         """
         device = data_samples.device
-        node = self.get_node(condition, node_type="simulation")
+        node = self.get_node(condition, node_type="simulation", solver=solver)
         
         with torch.no_grad():
             traj = node.trajectory(
@@ -386,7 +386,7 @@ class ConditionalFlowMatchingWithScore(L.LightningModule):
             
         return traj[-1]
         
-    def estimate_log_density(self, data_samples, condition, n_steps=100, estimator_type="hutch_gaussian"):
+    def estimate_log_density(self, data_samples, condition, n_steps=100, estimator_type="hutch_gaussian", solver="dopri5"):
         """
         Estimate log-density via probability flow ODE.
 
@@ -400,7 +400,7 @@ class ConditionalFlowMatchingWithScore(L.LightningModule):
             np.ndarray: Log-density estimates.
         """
         device = data_samples.device
-        node = self.get_node(condition, node_type="density", estimator_type=estimator_type)
+        node = self.get_node(condition, node_type="density", estimator_type=estimator_type, solver=solver)
         
         with torch.no_grad():
             traj = node.trajectory(
@@ -412,7 +412,7 @@ class ConditionalFlowMatchingWithScore(L.LightningModule):
         
         return log_p1.cpu().numpy()
     
-    def estimate_log_density_ratio(self, data_samples, condition, control, point, n_steps=100, estimator_type="hutch_gaussian"):
+    def estimate_log_density_ratio(self, data_samples, condition, control, point, n_steps=100, estimator_type="hutch_gaussian", solver="dopri5"):
         """
         Estimate log-density ratio.
 
@@ -428,7 +428,7 @@ class ConditionalFlowMatchingWithScore(L.LightningModule):
             np.ndarray: Log-density ratio estimates.
         """
         device = data_samples.device
-        node = self.get_node(condition, control, point, node_type="ratio", estimator_type=estimator_type)
+        node = self.get_node(condition, control, point, node_type="ratio", estimator_type=estimator_type, solver=solver)
         
         with torch.no_grad():
             traj = node.trajectory(

@@ -1,69 +1,36 @@
-import sys
-import traceback
 from pathlib import Path
+from tqdm import tqdm
+import traceback
+import sys
 import numpy as np
 import scanpy as sc
 import torch
-from torch.utils.data import DataLoader, TensorDataset
-import lightning as L
-from torchdyn.core import NeuralODE
-from sklearn.preprocessing import OneHotEncoder
+from lightning import Trainer
 import hydra
 from omegaconf import DictConfig
-from tqdm.auto import tqdm
-from utils import *
+from sklearn.preprocessing import OneHotEncoder
+from scRatio.datamodules.datamodule import AnnDataDataModule
+from scRatio.models.flow_matching import ConditionalFlowMatchingWithScore
+
+import sys 
+sys.path.insert(0, "..")
+from utils_scratio import train
 
 torch.set_float32_matmul_precision("medium")
 
-def train(batch_size, n_steps, model, optimizer, X, C):
-    for k in tqdm(range(n_steps)):
-        optimizer.zero_grad()
-    
-        indices = np.random.choice(range(X.shape[0]), size=batch_size, replace=False)
-        loss = model.shared_step(X[indices], C[indices], k)
-        
-        loss.backward()
-        optimizer.step()
-    return model
-
-def compute_ratio(model, data_samples, cond, cond_dim, condition, control, batch_size):
-    # Initialize the device 
-    device = data_samples.device   
-
-    # Initialize torch dataloader to iterate through the samples 
-    dataloader = DataLoader(TensorDataset(data_samples, cond), batch_size=batch_size, drop_last=False)
-    log_ratios = []
-    for batch in tqdm(dataloader):
-        X_batch = batch[0]
-        C_batch = batch[1]
-        
-        # correction term - its own field
-        node = NeuralODE(
-            NODEWrapper_with_ratio_tvf_rl(model, control=torch.tensor(control).float().expand(X_batch.shape[0], cond_dim).to(device),
-                condition=torch.tensor(condition).float().expand(X_batch.shape[0], cond_dim).to(device), point=C_batch),
-            solver="dopri5", sensitivity="adjoint", atol=1e-4, rtol=1e-4
-        )
-        
-        with torch.no_grad():
-            traj = node.trajectory(
-                torch.cat([X_batch, torch.zeros(X_batch.shape[0], 1).to(device)], dim=-1),
-                t_span=torch.linspace(1, 0, 2).to(device)
-            )
-        _, ratio = traj[-1][:, :-1], traj[-1][:, -1]
-        log_ratio_hat = -ratio.cpu().numpy()
-        log_ratios.append(log_ratio_hat)
-
-    return np.concatenate(log_ratios)
-
 def train_scratio(adata: sc.AnnData, scheduler_type: str, res_dir: Path, run_name: str):
+    # Initialize device 
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    
     # Fix number of PCs
     N_pcs = 20 
     
     # Observatoions and conditioning variables
-    X = torch.from_numpy(adata.obsm["X_pca"][:, :N_pcs]).float().cuda()
+    X = torch.from_numpy(adata.obsm["X_pca"][:, :N_pcs]).float().to(device)
     C = OneHotEncoder().fit_transform(adata.obs[["treatment"]]).toarray()
-    C = torch.from_numpy(C).float().cuda()
+    C = torch.from_numpy(C).float().to(device)
     
+    # Different schedules 
     if scheduler_type == "deterministic":
         sigma = 0
         sigma_min = 0
@@ -91,22 +58,42 @@ def train_scratio(adata: sc.AnnData, scheduler_type: str, res_dir: Path, run_nam
         hidden_dims=[1024, 1024, 1024],
         encoder_hidden_dims=[256],
         encoder_out_dim=256,
-        encoder_out_dim_cond=50,
-        use_sinusoidal_embeddings=True,
-        sinusoidal_feature_dim=50,
+        encoder_out_dim_cond=50, 
+        time_feature_dim=50, 
         lambda_t=lambda_t,
         lambda_sp_t=lambda_sp_t,
-        betas=[0], 
-        lr=1e-4
-    ).to("cuda")
+        betas=[0],
+        lr = 1e-4,
+        dropout = 0).to(device)
+    
+    # Train model 
     optimizer = model.configure_optimizers()
     model = train(batch_size, n_steps, model, optimizer, X, C)
     
-    # Compute ratio
-    control = np.array([1, 0])
-    condition = np.array([0, 1])
-    log_ratio = compute_ratio(model, X, C, 2, condition, control, batch_size=1000)
-    adata.obs["log_ratios"] = log_ratio 
+    # Annotate AnnData 
+    from torch.utils.data import DataLoader, TensorDataset
+    # Control and condition labels
+    control = np.array([1., 0.])
+    condition = np.array([0., 1.])
+    # Create dataloader to estimate the ratio 
+    dataloader_ratio = DataLoader(TensorDataset(X, C), 
+                                  batch_size=1000, 
+                                  drop_last=False)
+    
+    lik_ratios_data = []
+    with torch.no_grad():
+        for batch in tqdm(dataloader_ratio):
+            X_batch = batch[0]
+            C_batch = batch[1]
+            ratios = model.estimate_log_density_ratio(data_samples=X_batch, 
+                                                        control=control.unsqueeze(0).repeat(X_batch.shape[0], 1), 
+                                                        condition=condition.unsqueeze(0).repeat(X_batch.shape[0], 1), 
+                                                        point=C_batch, 
+                                                        n_steps=2)
+            lik_ratios_data.append(ratios)
+    
+    lik_ratios_data = np.concatenate(lik_ratios_data)
+    adata.obs["log_ratios"] = lik_ratios_data 
     
     # Save results 
     run_dir = res_dir / scheduler_type
@@ -132,10 +119,7 @@ def main(config: DictConfig):
 
     for i in range(3):
         run_name = f"oversamp_{tag}_{i}"
-
-        # IMPORTANT: copy AnnData for each run
         adata = base_adata.copy()
-
         train_scratio(adata, scheduler_type, res_dir, run_name)
     
 if __name__ == "__main__":
