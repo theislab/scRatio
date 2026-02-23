@@ -1,4 +1,3 @@
 run:
-  dir: /home/icb/lorenzo.consoli/repos/scFM_density_estimation/logs/${now:%Y-%m-%d}_${now:%H-%M-%S}/hydra/
-sweep:
-  dir: /home/icb/lorenzo.consoli/repos/scFM_density_estimation/logs/multiruns/${now:%Y-%m-%d}_${now:%H-%M-%S}/hydra/
+  dir: .
+output_subdir: null

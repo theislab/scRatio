@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 
 def get_cfm_model(n_dims, cond_dims, config):
-    sys.path.insert(0, "/home/icb/lorenzo.consoli/repos/scFM_density_estimation/notebooks/Neurips/")
+    sys.path.insert(0, "..")
     from utils import ConditionalFlowMatchingWithScore
 
     # 4. Prepare interpolation functions
@@ -87,7 +87,7 @@ def save_cfm_model(model, save_dir, model_name, logger,):
 
 
 @hydra.main(
-    config_path="/home/icb/lorenzo.consoli/repos/scFM_density_estimation/notebooks/Neurips/configs/cfm",
+    config_path="../configs/cfm",
     config_name="train_cfm"
 )
 def main(config):

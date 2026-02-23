@@ -1,2 +1,2 @@
-adata_path: "/lustre/groups/ml01/workspace/alessandro.palma/celldreamer/datasets/processed_full_genome/c_elegans/c_elegans.h5ad"
-cfm_model_dir: "/home/icb/lorenzo.consoli/repos/scFM_density_estimation/dumps/cfm_runs/2026-01-19_16-26-03_68becccb"
+adata_path: "../../project_folder/data/neurips/neurips.h5ad"
+cfm_model_dir: path_to_cfm

@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 @hydra.main(
-    config_path="/home/icb/lorenzo.consoli/repos/scFM_density_estimation/notebooks/cElegans/configs/scvi",
+    config_path="../configs/scvi",
     config_name="train_scvi"
 )
 def main(config):

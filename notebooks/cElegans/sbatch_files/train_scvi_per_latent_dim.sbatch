@@ -12,7 +12,7 @@
 ENV_NAME="sc_flow_density"
 echo "Using environment: $ENV_NAME"
 
-WDIR=/home/icb/lorenzo.consoli/repos/scFM_density_estimation/notebooks/cElegans/scripts
+WDIR=../scripts
 cd "$WDIR" || exit 1
 echo "Current Working Directory: $WDIR"
 
