@@ -1,2 +1,2 @@
-adata_path: "/lustre/groups/ml01/workspace/alessandro.palma/celldreamer/datasets/processed_full_genome/c_elegans/c_elegans.h5ad"
-output_dir: "/home/icb/lorenzo.consoli/repos/scFM_density_estimation/dumps"
+adata_path: "../../project_folder/data/c_elegans/c_elegans.h5ad"
+output_dir: "../../project_folder/results/celegans/"

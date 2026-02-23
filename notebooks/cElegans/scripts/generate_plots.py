@@ -139,12 +139,12 @@ def plot_llr_densities(
 
 
 @hydra.main(
-    config_path="/home/icb/lorenzo.consoli/repos/scFM_density_estimation/notebooks/cElegans/configs/run_plots",
+    config_path="../configs/run_plots",
     config_name="run_plots"
 )
 def main(config):
     import sys
-    sys.path.insert(0, "/home/icb/lorenzo.consoli/repos/scFM_density_estimation/notebooks/cElegans/scripts")
+    sys.path.insert(0, "../cElegans/scripts")
     from train_cfm import get_cfm_model
 
     # Read data

@@ -1,3 +1,3 @@
-res_dir: /home/icb/alessandro.palma/environment/scFM_density_estimation/project_folder/results/mi_experiments/scRatio/simulate_under_uncond
-data_path: /home/icb/alessandro.palma/environment/scFM_density_estimation/project_folder/data/mi_data/
+res_dir: ../../../../project_folder/results/mi_experiments/scRatio/simulate_under_uncond
+data_path: ../../../../project_folder/data/mi_data/
 dimensions: 20

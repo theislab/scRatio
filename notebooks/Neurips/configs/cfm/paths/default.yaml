@@ -1,3 +1,3 @@
-adata_path: "/lustre/groups/ml01/workspace/alessandro.palma/celldreamer/datasets/processed_full_genome/neurips/neurips.h5ad"
-output_dir: "/home/icb/lorenzo.consoli/repos/scFM_density_estimation/dumps/Neurips"
-scvi_model_dir: /home/icb/lorenzo.consoli/repos/scFM_density_estimation/dumps/Neurips/scvi_runs/2026-01-19_12-56-51_838ed555
+adata_path: "../../project_folder/data/neurips/neurips.h5ad"
+output_dir: "../../project_folder/results/neurips/"
+scvi_model_dir: path_to_scvi

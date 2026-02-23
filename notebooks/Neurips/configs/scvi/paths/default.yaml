@@ -1,2 +1,2 @@
-adata_path: "/lustre/groups/ml01/workspace/alessandro.palma/celldreamer/datasets/processed_full_genome/neurips/neurips.h5ad"
-output_dir: "/home/icb/lorenzo.consoli/repos/scFM_density_estimation/dumps/Neurips"
+adata_path: "../../project_folder/data/neurips/neurips.h5ad"
+output_dir: "../../project_folder/results/neurips/"
