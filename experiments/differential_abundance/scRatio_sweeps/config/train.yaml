@@ -3,3 +3,4 @@
 defaults:
   - _self_
   - hparams: default
+  - hydra: default

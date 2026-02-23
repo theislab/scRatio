@@ -15,4 +15,6 @@
 ## hydra error logging
 export HYDRA_FULL_ERROR=1;
 
-python ../train_mrvi.py --multirun +hparams_search=default +launcher=slurm
+cd ..
+
+python train_mrvi.py --multirun +hparams_search=default +launcher=slurm

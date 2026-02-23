@@ -10,6 +10,12 @@ from .dataset import ArrayDataset
 
 
 def _make_one_hot_encoder() -> OneHotEncoder:
+    """
+    Create a OneHotEncoder compatible across sklearn versions.
+
+    Returns:
+        OneHotEncoder: Configured encoder with dense output.
+    """
     try:
         return OneHotEncoder(sparse_output=False, handle_unknown="ignore")
     except TypeError:
@@ -17,6 +23,29 @@ def _make_one_hot_encoder() -> OneHotEncoder:
 
 
 class AnnDataDataModule(L.LightningDataModule):
+    """
+    LightningDataModule for training on AnnData objects.
+
+    Loads an AnnData file, extracts a representation from `.obsm`,
+    one-hot encodes specified conditions, and creates train/val/test splits.
+
+    Args:
+        adata_path (str): Path to .h5ad file.
+        conditions (List[str]): List of condition keys in adata.obs.
+        num_features (Optional[int]): Number of representation features to use.
+        train_batch_size (int): Training batch size.
+        val_batch_size (int): Validation batch size.
+        test_batch_size (int): Test batch size.
+        val_split (float, optional): Validation split fraction.
+        test_split (float, optional): Test split fraction.
+        train_sample_size (Optional[int], optional): Limit training samples.
+        num_workers (int, optional): DataLoader workers.
+        seed (int, optional): Random seed.
+        representation_key (str, optional): Key in adata.obsm.
+        pin_memory (bool, optional): DataLoader pin_memory.
+        drop_last (bool, optional): Drop last batch in training.
+    """
+
     def __init__(
         self,
         adata_path: str,
@@ -58,10 +87,13 @@ class AnnDataDataModule(L.LightningDataModule):
         self.test_dataset: Optional[ArrayDataset] = None
         self._prepared = False
 
-    def prepare_data(self) -> None:
-        ad.read_h5ad(self.adata_path)
-
     def setup(self, stage: Optional[str] = None) -> None:
+        """
+        Load data, encode conditions, and create dataset splits.
+
+        Args:
+            stage (Optional[str]): Lightning stage.
+        """
         if self._prepared:
             return
 
@@ -86,6 +118,12 @@ class AnnDataDataModule(L.LightningDataModule):
         self._prepared = True
 
     def train_dataloader(self) -> DataLoader:
+        """
+        Create training DataLoader.
+
+        Returns:
+            DataLoader: Training loader.
+        """
         return DataLoader(
             self.train_dataset,
             batch_size=self.train_batch_size,
@@ -97,8 +135,14 @@ class AnnDataDataModule(L.LightningDataModule):
         )
 
     def val_dataloader(self) -> Optional[DataLoader]:
+        """
+        Create validation DataLoader.
+
+        Returns:
+            Optional[DataLoader]: Validation loader or None.
+        """
         if self.val_dataset is None:
-            return None
+            return []
         return DataLoader(
             self.val_dataset,
             batch_size=self.val_batch_size,
@@ -110,8 +154,14 @@ class AnnDataDataModule(L.LightningDataModule):
         )
 
     def test_dataloader(self) -> Optional[DataLoader]:
+        """
+        Create test DataLoader.
+
+        Returns:
+            Optional[DataLoader]: Test loader or None.
+        """
         if self.test_dataset is None:
-            return None
+            return []
         return DataLoader(
             self.test_dataset,
             batch_size=self.test_batch_size,
@@ -123,6 +173,18 @@ class AnnDataDataModule(L.LightningDataModule):
         )
 
     def _get_representation(self, adata: ad.AnnData) -> np.ndarray:
+        """
+        Extract feature representation from AnnData.
+
+        Args:
+            adata (ad.AnnData): AnnData object.
+
+        Returns:
+            np.ndarray: Feature matrix.
+
+        Raises:
+            ValueError: If representation is missing or invalid.
+        """
         if self.representation_key not in adata.obsm:
             raise ValueError(
                 f"AnnData missing '{self.representation_key}' in .obsm. "
@@ -138,6 +200,19 @@ class AnnDataDataModule(L.LightningDataModule):
         return np.asarray(x[:, :self.num_features])
 
     def _encode_conditions(self, adata: ad.AnnData) -> np.ndarray:
+        """
+        One-hot encode specified conditions.
+
+        Args:
+            adata (ad.AnnData): AnnData object.
+
+        Returns:
+            np.ndarray: Concatenated encoded conditions.
+
+        Raises:
+            ValueError: If no conditions provided.
+            KeyError: If condition key missing.
+        """
         if not self.conditions:
             raise ValueError("conditions must be a non-empty list.")
 
@@ -163,6 +238,18 @@ class AnnDataDataModule(L.LightningDataModule):
         return np.concatenate(encoded_parts, axis=1)
 
     def _split_indices(self, n_samples: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Split indices into train/val/test sets.
+
+        Args:
+            n_samples (int): Total number of samples.
+
+        Returns:
+            Tuple[np.ndarray, np.ndarray, np.ndarray]: (train_idx, val_idx, test_idx).
+
+        Raises:
+            ValueError: If split fractions are invalid.
+        """
         if self.val_split + self.test_split >= 1.0:
             raise ValueError("val_split + test_split must be < 1.0")
 

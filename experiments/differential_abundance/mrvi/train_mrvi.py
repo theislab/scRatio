@@ -1,4 +1,3 @@
-import argparse
 from pathlib import Path
 from omegaconf import DictConfig
 import sys
@@ -7,7 +6,7 @@ import traceback
 import hydra
 import scanpy as sc
 from scvi.external import MRVI
-
+import os
 
 def train_mrvi(adata, res_dir: Path, run_name: str):
     # Initialize sample key 
@@ -51,7 +50,7 @@ def train_mrvi(adata, res_dir: Path, run_name: str):
 
     return model
 
-@hydra.main(config_path="/home/icb/alessandro.palma/environment/scFM_density_estimation/experiments/differential_abundance/mrvi/config", config_name="train", version_base=None)
+@hydra.main(config_path="./config", config_name="train", version_base=None)
 def main(config: DictConfig):
     res_dir = Path(config.paths.res_dir)
     res_dir.mkdir(parents=True, exist_ok=True)  # make directory if doesn' exist
@@ -69,7 +68,7 @@ def main(config: DictConfig):
         train_mrvi(adata, res_dir, run_name)
     
 if __name__ == "__main__":
-    # running the experiment
+    # Running the experiment
     try: 
         main()
     except Exception as e:

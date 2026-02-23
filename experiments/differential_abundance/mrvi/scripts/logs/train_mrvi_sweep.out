@@ -1,9 +1,0 @@
-[2026-01-17 12:23:18,161][HYDRA] Submitit 'slurm' sweep output dir : multirun/2026-01-17/12-23-17
-[2026-01-17 12:23:18,162][HYDRA] 	#0 : paths.adata_path=/home/icb/alessandro.palma/environment/scFM_density_estimation/project_folder/data/pbmc68k_oversampled/pbmc68k_0.0.h5ad +hparams_search=default +launcher=slurm
-[2026-01-17 12:23:18,165][HYDRA] 	#1 : paths.adata_path=/home/icb/alessandro.palma/environment/scFM_density_estimation/project_folder/data/pbmc68k_oversampled/pbmc68k_0.05.h5ad +hparams_search=default +launcher=slurm
-[2026-01-17 12:23:18,167][HYDRA] 	#2 : paths.adata_path=/home/icb/alessandro.palma/environment/scFM_density_estimation/project_folder/data/pbmc68k_oversampled/pbmc68k_0.1.h5ad +hparams_search=default +launcher=slurm
-[2026-01-17 12:23:18,169][HYDRA] 	#3 : paths.adata_path=/home/icb/alessandro.palma/environment/scFM_density_estimation/project_folder/data/pbmc68k_oversampled/pbmc68k_0.2.h5ad +hparams_search=default +launcher=slurm
-[2026-01-17 12:23:18,172][HYDRA] 	#4 : paths.adata_path=/home/icb/alessandro.palma/environment/scFM_density_estimation/project_folder/data/pbmc68k_oversampled/pbmc68k_0.3.h5ad +hparams_search=default +launcher=slurm
-[2026-01-17 12:23:18,174][HYDRA] 	#5 : paths.adata_path=/home/icb/alessandro.palma/environment/scFM_density_estimation/project_folder/data/pbmc68k_oversampled/pbmc68k_0.4.h5ad +hparams_search=default +launcher=slurm
-[2026-01-17 12:23:18,176][HYDRA] 	#6 : paths.adata_path=/home/icb/alessandro.palma/environment/scFM_density_estimation/project_folder/data/pbmc68k_oversampled/pbmc68k_0.45.h5ad +hparams_search=default +launcher=slurm
-[2026-01-17 12:23:18,178][HYDRA] 	#7 : paths.adata_path=/home/icb/alessandro.palma/environment/scFM_density_estimation/project_folder/data/pbmc68k_oversampled/pbmc68k_0.5.h5ad +hparams_search=default +launcher=slurm
