@@ -46,10 +46,6 @@ dev = [
     "jupyter>=1.0.0",
 ]
 
-[project.urls]
-Repository = "https://github.com/yourusername/scRatio"
-Documentation = "https://github.com/yourusername/scRatio#readme"
-
 [tool.setuptools]
 package-dir = {"" = "src"}
 
