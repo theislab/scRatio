@@ -10,7 +10,9 @@ readme = "README.md"
 requires-python = ">=3.9"
 license = {text = "MIT"}
 authors = [
-  {name = "Egor Antipov", email = "antipov.egor@gmail.com"}
+  {name = "Egor Antipov", email = "antipov.egor@gmail.com"},
+  {name = "Alessandro Palma", email = "alessandro.palma@helmholtz-munich.de"},
+  {name = "Lorenzo Consoli", email = "lorenzo.consoli@helmholtz-munich.de"}
 ]
 keywords = ["single-cell", "flow-matching", "density-estimation"]
 classifiers = [
