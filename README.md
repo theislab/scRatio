@@ -19,7 +19,7 @@ Clone the repository and install in editable mode with dependencies:
 
 ```bash
 git clone <repository-url>
-cd scFM_density_estimation
+cd scRatio
 pip install -e .
 ```
 
