@@ -99,7 +99,7 @@ def get_params(num_dims):
 @hydra.main(config_path="../configs", config_name="base", version_base=None)
 def main(cfg: DictConfig):
     np.random.seed(42)
-    os.makedirs("./runs/scripts/checkpoints/", exist_ok=True)
+    os.makedirs("./runs/gaussian_tests/scripts/checkpoints/", exist_ok=True)
 
     n = cfg.num_dims
     N = 100_000
@@ -124,7 +124,7 @@ def main(cfg: DictConfig):
 
         sigma_min_last = 2
     else:
-        with open(f"./runs/scripts/checkpoints/checkpoint_{cfg.loc}_{cfg.num_dims}.pkl", "rb") as f:
+        with open(f"./runs/gaussian_tests/scripts/checkpoints/checkpoint_{cfg.loc}_{cfg.num_dims}.pkl", "rb") as f:
             saved_vars = pickle.load(f)
 
         results = saved_vars["results"]
@@ -204,7 +204,7 @@ def main(cfg: DictConfig):
         sigma_last = sigma
         sigma_min_last = sigma_min
 
-        with open(f"./runs/scripts/checkpoints/checkpoint_{cfg.loc}_{cfg.num_dims}.pkl", "wb") as f:
+        with open(f"./runs/gaussian_tests/scripts/checkpoints/checkpoint_{cfg.loc}_{cfg.num_dims}.pkl", "wb") as f:
             pickle.dump({
                 "results": results,
                 "sigma_last": sigma_last,

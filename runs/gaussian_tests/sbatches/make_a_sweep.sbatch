@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=tables_scFM
-#SBATCH --output=./runs/sbatches/outputs/tables_output_%A.txt
-#SBATCH --error=./runs/sbatches/outputs/tables_error_%A.txt
+#SBATCH --output=./runs/gaussian_tests/sbatches/outputs/sweep_output_%A.txt
+#SBATCH --error=./runs/gaussian_tests/sbatches/outputs/sweep_error_%A.txt
 #SBATCH --ntasks=1
 #SBATCH --time=1:00:00
 #SBATCH --mem=30Gb
@@ -12,12 +12,10 @@
 
 export HYDRA_FULL_ERROR=1
 
-source ../miniconda3/bin/activate
-conda activate scaling-transformers
-
-python ./runs/scripts/make_comparison.py \
+python ./runs/gaussian_tests/scripts/make_a_sweep.py \
     --multirun \
-    +loc=1,2,4 \
     +num_dims=2,5,10,20,30 \
+    +lr=0.001,0.0001 \
+    +cond_latent_dim=32,64,128 \
     +start_from_scratch=true \
     +launcher=super_gpu_normal
