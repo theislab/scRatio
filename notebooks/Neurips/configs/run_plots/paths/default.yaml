@@ -1,2 +1,2 @@
-adata_path: "../../project_folder/data/c_elegans/c_elegans.h5ad"
+adata_path: "../../../project_folder/data/neurips/neurips.h5ad"
 cfm_model_dir: path_to_cfm 

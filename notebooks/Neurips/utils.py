@@ -8,7 +8,6 @@ from torch import nn
 from scFM_density_estimation.models import *
 
 
-
 class Encoder(nn.Module):
     def __init__(self, cond_dim: int = 1, cond_hidden_dims: list = [],
                  cond_out_dim: int = 2, dropout: float = 0):

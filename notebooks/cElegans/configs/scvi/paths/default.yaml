@@ -1,2 +1,2 @@
-adata_path: "../../project_folder/data/c_elegans/c_elegans.h5ad"
-output_dir: "../../project_folder/results/celegans/"
+adata_path: "../../../project_folder/data/celegans/c_elegans.h5ad"
+output_dir: "../../../project_folder/results/celegans/"
