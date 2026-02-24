@@ -163,3 +163,4 @@ if __name__ == "__main__":
         logger.info(f"An error occurred: {e}")
         traceback.print_exc(file=sys.stderr)
         sys.exit(1)
+        

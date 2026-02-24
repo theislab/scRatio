@@ -1,2 +1,0 @@
-[2026-01-27 10:42:56,747][HYDRA] Submitit 'slurm' sweep output dir : multirun/2026-01-27/10-42-56
-[2026-01-27 10:42:56,750][HYDRA] 	#0 : hparams.adata_path=/home/icb/alessandro.palma/environment/scFM_density_estimation/project_folder/data/pbmc68k_oversampled/pbmc68k_0.5.h5ad hparams.dimensions=50 hparams.batch_size=512 hparams.scheduler_type=stochastic_0.25 +hparams_search=default +launcher=slurm

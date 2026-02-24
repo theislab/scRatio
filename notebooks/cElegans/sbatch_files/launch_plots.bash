@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Directory containing subdirectories
-PARENT_DIR="../../../results/neurips/cfm_runs"
+PARENT_DIR="../../../project_folder/results/celegans/cfm_runs"
 
 # Iterate over each subdirectory
 for dir in "$PARENT_DIR"/*; do

@@ -11,7 +11,7 @@ from tqdm import tqdm
 from scRatio.models.flow_matching import ConditionalFlowMatchingWithScore
 from utils import NODEWrapper_with_ratio_generic_models
 
-sys.path.insert(0, "../../../../experiments/differential_abundance/")
+sys.path.insert(0, "../../../../runs/differential_abundance/")
 from utils_scratio import train
 
 # Steps specific for each dimensionality

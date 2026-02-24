@@ -144,7 +144,7 @@ def plot_llr_densities(
 )
 def main(config):
     import sys
-    sys.path.insert(0, "../cElegans/scripts")
+    sys.path.insert(0, "../scripts")
     from train_cfm import get_cfm_model
 
     # Read data
