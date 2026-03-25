@@ -288,7 +288,7 @@ def main(cfg: DictConfig):
     results["mask_control"] = mask_control
     results["mask_both"] = mask_both
 
-    with open(f"./notebooks/icml_tests/table_results/results_icml_{cfg.loc}_{cfg.num_dims}_swept2.pkl", "wb") as f:
+    with open(f"./notebooks/gaussian_tests/table_results/results_icml_{cfg.loc}_{cfg.num_dims}_swept2.pkl", "wb") as f:
         pickle.dump(results, f)
 
     print("FINISHED")
