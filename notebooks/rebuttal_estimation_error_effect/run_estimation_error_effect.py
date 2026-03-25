@@ -16,7 +16,7 @@ from scRatio.models.flow_matching import ConditionalFlowMatchingWithScore
 
 
 loc = 2.0
-n = 2
+n = 30
 
 N = 100_000
 cond_dim = 2
