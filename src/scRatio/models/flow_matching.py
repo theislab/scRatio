@@ -160,24 +160,39 @@ class ConditionalFlowMatchingWithScore(L.LightningModule):
         lambda_sp_t: Callable,
         betas: list,
         lr: float = 1e-4,
-        dropout: float = 0
+        dropout: float = 0,
+        init_shared_encoder: bool = False,
+        init_cond_encoder: bool = False
     ):
         super().__init__()
         
-        self.data_encoder = Encoder(input_dim, encoder_hidden_dims, encoder_out_dim, dropout)
-        self.cond_encoders = nn.ModuleList([
-            Encoder(cond_dim, encoder_hidden_dims, encoder_out_dim_cond, dropout)
-            for cond_dim in cond_dims
-        ])
+        if init_shared_encoder:
+            self.data_encoder = Encoder(input_dim, encoder_hidden_dims, encoder_out_dim, dropout)
+        else:
+            encoder_out_dim = input_dim
+            self.data_encoder = torch.nn.Identity()
+        if init_cond_encoder:
+            self.cond_encoders = nn.ModuleList([
+                Encoder(cond_dim, encoder_hidden_dims, encoder_out_dim_cond, dropout)
+                for cond_dim in cond_dims
+            ])
+            ecoder_out_full = encoder_out_dim_cond * len(cond_dims)
+        else:
+            encoder_out_dim_cond = cond_dims
+            self.cond_encoders = nn.ModuleList([
+                torch.nn.Identity()
+                for _ in cond_dims
+            ])
+            ecoder_out_full = sum(cond_dims)
         
         self.vf_mlp = FlowMatchingMLP(
-            encoder_out_dim + encoder_out_dim_cond * len(cond_dims) + time_feature_dim,
+            encoder_out_dim + ecoder_out_full + time_feature_dim,
             hidden_dims,
             input_dim,
             dropout
         )
         self.score_mlp = FlowMatchingMLP(
-            encoder_out_dim + encoder_out_dim_cond * len(cond_dims) + time_feature_dim,
+            encoder_out_dim + ecoder_out_full + time_feature_dim,
             hidden_dims,
             input_dim,
             dropout

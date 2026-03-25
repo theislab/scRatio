@@ -37,7 +37,7 @@ lambda_t = lambda t: torch.sqrt((1 - (1 - sigma_min) * t) ** 2 + sigma * t * (1 
 lambda_sp_t = lambda t: (sigma * (1 - 2 * t) - 2 * (1 - sigma_min) * (1 - (1 - sigma_min) * t)) / 2
 
 
-train_models = False
+train_models = True
 
 num_steps_list = [
     1_000,
@@ -123,6 +123,8 @@ def fit_model_per_step(n_steps, train_loader):
         lr=1e-4,
         time_feature_dim=time_feature_dim,
         encoder_out_dim_cond=cond_latent_dim,
+        init_shared_encoder=False,
+        init_cond_encoder=False,
     )
     trainer = L.Trainer(
         accelerator="gpu" if torch.cuda.is_available() else "cpu",
@@ -150,7 +152,7 @@ if __name__ == "__main__":
 
         for n_steps in num_steps_list:
             print(f"Training model for {n_steps} steps")
-            model = fit_model_per_step(n_steps)
+            model = fit_model_per_step(n_steps, train_loader)
             steps2model[n_steps] = model
             with open(os.path.join(dims_dir, f"{n_steps}-steps_model.pkl"), "wb") as fb:
                 cloudpickle.dump(model, fb)
@@ -206,5 +208,5 @@ if __name__ == "__main__":
             }
         score_altered_preds[dim] = dim_preds
 
-    with open(f"out/{dim}-dim-results.pkl", "wb") as fb:
+    with open(os.path.join(dims_dir, "results.pkl"), "wb") as fb:
         cloudpickle.dump(score_altered_preds, fb)
