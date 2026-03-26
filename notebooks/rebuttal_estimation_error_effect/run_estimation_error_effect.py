@@ -5,6 +5,7 @@ import torch
 import torch.nn.functional as F
 import time
 import os
+import copy
 
 from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader
@@ -16,7 +17,6 @@ from scRatio.models.flow_matching import ConditionalFlowMatchingWithScore
 
 
 loc = 2.0
-n = 30
 
 N = 100_000
 cond_dim = 2
@@ -24,8 +24,6 @@ batch_size = 512
 
 control = np.array([1, 0])
 condition = np.array([0, 1])
-locs = [[0 for _ in range(n)]] + [[loc for _ in range(n)]]
-
 sigma = 0
 sigma_min = 0.0
 
@@ -37,7 +35,7 @@ lambda_t = lambda t: torch.sqrt((1 - (1 - sigma_min) * t) ** 2 + sigma * t * (1 
 lambda_sp_t = lambda t: (sigma * (1 - 2 * t) - 2 * (1 - sigma_min) * (1 - (1 - sigma_min) * t)) / 2
 
 
-train_models = True
+train_models = False
 
 num_steps_list = [
     1_000,
@@ -109,7 +107,7 @@ def evaluate_model(model, data_samples, cond, cond_dim, condition, control, locs
     return [log_ratio_true, log_condition_true, log_control_true, log_ratio_hat_naive, log_ratio_hat_v2_scratio, log_condition_hat, log_control_hat], [time_true, time_hat, time_hat_v2]
 
 
-def fit_model_per_step(n_steps, train_loader):
+def fit_model_per_step(n_steps, train_loader, n):
 
     model = ConditionalFlowMatchingWithScore(
         input_dim=n,
@@ -138,8 +136,7 @@ def fit_model_per_step(n_steps, train_loader):
     return model
 
 
-if __name__ == "__main__":
-
+def main(n, locs):
     X_train, X_test, C_train, C_test = prepare_dataset(n, N, cond_dim, locs)
     train_loader = build_train_loader(X_train, C_train, batch_size)
 
@@ -152,7 +149,7 @@ if __name__ == "__main__":
 
         for n_steps in num_steps_list:
             print(f"Training model for {n_steps} steps")
-            model = fit_model_per_step(n_steps, train_loader)
+            model = fit_model_per_step(n_steps, train_loader, n)
             steps2model[n_steps] = model
             with open(os.path.join(dims_dir, f"{n_steps}-steps_model.pkl"), "wb") as fb:
                 cloudpickle.dump(model, fb)
@@ -169,32 +166,35 @@ if __name__ == "__main__":
                 continue
 
     score_altered_preds = {}
-    for dim, model in steps2model.items():
+    for n_steps, model in steps2model.items():
         model = model.to("cuda")
         dim_preds = {}
-        for dim_other, model_other in steps2model.items():
+        for n_steps_other, model_other in steps2model.items():
             model_other = model_other.to("cuda")
-            print(f"{dim=}-{dim_other=}")
-            modified_model = ConditionalFlowMatchingWithScore(
-                input_dim=n,
-                cond_dims=[cond_dim],
-                hidden_dims=[1024, 1024, 1024],
-                encoder_hidden_dims=[256],
-                encoder_out_dim=latent_dim,
-                lambda_t=lambda_t,
-                lambda_sp_t=lambda_sp_t,
-                betas=[0],
-                lr=1e-4,
-                time_feature_dim=time_feature_dim,
-                encoder_out_dim_cond=cond_latent_dim,
-            )
+            print(f"{n_steps=}-{n_steps_other=}")
+            # modified_model = ConditionalFlowMatchingWithScore(
+            #     input_dim=n,
+            #     cond_dims=[cond_dim],
+            #     hidden_dims=[1024, 1024, 1024],
+            #     encoder_hidden_dims=[256],
+            #     encoder_out_dim=latent_dim,
+            #     lambda_t=lambda_t,
+            #     lambda_sp_t=lambda_sp_t,
+            #     betas=[0],
+            #     lr=1e-4,
+            #     time_feature_dim=time_feature_dim,
+            #     encoder_out_dim_cond=cond_latent_dim,
+            #     init_shared_encoder=False,
+            #     init_cond_encoder=False,
+            # )
+            modified_model = copy.deepcopy(model)
             modified_model.to("cuda")
             modified_model.vf_mlp = model.vf_mlp
             modified_model.score_mlp = model_other.score_mlp
 
             # corrected model
-            [log_ratio_true, log_condition_true, log_control_true, log_ratio_hat_naive, log_ratio_hat_v2_scratio, log_condition_hat, log_control_hat], [time_true, time_hat_naive, time_hat_scratio] = evaluate_model(model, X_test, C_test, cond_dim, condition, control, locs)
-            dim_preds[dim_other] = {
+            [log_ratio_true, log_condition_true, log_control_true, log_ratio_hat_naive, log_ratio_hat_v2_scratio, log_condition_hat, log_control_hat], [time_true, time_hat_naive, time_hat_scratio] = evaluate_model(modified_model, X_test, C_test, cond_dim, condition, control, locs)
+            dim_preds[n_steps_other] = {
                 "log_ratio_true": log_ratio_true,
                 "log_condition_true": log_condition_true,
                 "log_control_true": log_control_true,
@@ -206,7 +206,26 @@ if __name__ == "__main__":
                 "time_hat_naive": time_hat_naive,
                 "time_hat_scratio": time_hat_scratio
             }
-        score_altered_preds[dim] = dim_preds
+        score_altered_preds[n_steps] = dim_preds
 
     with open(os.path.join(dims_dir, "results.pkl"), "wb") as fb:
         cloudpickle.dump(score_altered_preds, fb)
+
+
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description="Run the flow matching model pipeline.")
+    
+    # 2. Add arguments
+    # The line `main(argsn)` is calling the `main` function with the argument `argsn`. However, it
+    # seems like there is a typo in the argument name. It should be `args.n` instead of `argsn`.
+    parser.add_argument(
+        "-n", 
+        type=int, 
+        default=2, 
+        help="Batch size for the DataLoader."
+    )
+    args = parser.parse_args()
+    n = args.n
+    locs = [[0 for _ in range(n)]] + [[loc for _ in range(n)]]
+    main(args.n, locs)
