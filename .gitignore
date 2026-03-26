@@ -190,5 +190,15 @@ sweep_results/
 # h5ad files
 *.h5ad
 
+# Pickle files
+*.pkl
+
+# sh files 
+*.sh
+
+# Err and out files
+*.err   
+*.out
+
 # Symlink to project folder 
 project_folder
