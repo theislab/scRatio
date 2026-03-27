@@ -1,0 +1,3 @@
+res_dir: ../../../../project_folder/results/mi_experiments/scRatio/simulate_under_uncond_sweep
+data_path: ../../../../project_folder/data/mi_data/split_data
+dimensions: 20

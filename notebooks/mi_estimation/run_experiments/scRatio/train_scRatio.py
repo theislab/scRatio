@@ -57,7 +57,14 @@ def compute_ratio(data_samples, model_num, model_den, batch_size):
 
     return np.concatenate(log_ratios)
 
-def train_scratio(X_block_train, X_prior_train, X_block_test, X_prior_test, scheduler_type, sigma):
+def train_scratio(X_block_train, 
+                  X_prior_train,
+                  X_block_val,
+                  X_prior_val,
+                  X_block_test, 
+                  X_prior_test,
+                  scheduler_type,
+                  sigma):
        
     # Initialize scheduler 
     if scheduler_type == "deterministic":
@@ -82,6 +89,9 @@ def train_scratio(X_block_train, X_prior_train, X_block_test, X_prior_test, sche
     
     X_trains = {"model_prior": X_prior_train, 
                 "model_block": X_block_train}
+    
+    X_vals = {"model_prior": X_prior_val, 
+                "model_block": X_block_val}
     
     X_test = {"model_prior": X_prior_test, 
                 "model_block": X_block_test}
@@ -108,11 +118,16 @@ def train_scratio(X_block_train, X_prior_train, X_block_test, X_prior_test, sche
         optimizer = models[model].configure_optimizers()
         model = train(batch_size, n_steps, models[model], optimizer, X_trains[model], None)
     
-    ratio_estimations = compute_ratio(X_test["model_block"],
-                                      models["model_block"], 
-                                      models["model_prior"], 
-                                      1000)
-    return ratio_estimations
+    ratio_estimations_val = compute_ratio(X_vals["model_block"],
+                                            models["model_block"], 
+                                            models["model_prior"], 
+                                            1000)
+    
+    ratio_estimations_test = compute_ratio(X_test["model_block"],
+                                            models["model_block"], 
+                                            models["model_prior"], 
+                                            1000)
+    return ratio_estimations_val, ratio_estimations_test
 
 @hydra.main(config_path="./config", config_name="train", version_base=None)
 def main(config: DictConfig):
@@ -122,14 +137,18 @@ def main(config: DictConfig):
     # Read data
     data_path = Path(config.paths.data_path)
     dimensions = config.paths.dimensions
-    X_block = np.load(data_path / f"block_sigma_{dimensions}.npy")
-    X_prior = np.load(data_path / f"identity_sigma_{dimensions}.npy")
+    
+    X_block_train = np.load(data_path / f"block_sigma_{dimensions}_train.npy")
+    X_block_val = np.load(data_path / f"block_sigma_{dimensions}_val.npy")
+    X_block_test = np.load(data_path / f"block_sigma_{dimensions}_test.npy")
+    
+    X_prior_train = np.load(data_path / f"identity_sigma_{dimensions}_train.npy")
+    X_prior_val = np.load(data_path / f"identity_sigma_{dimensions}_val.npy")
+    X_prior_test = np.load(data_path / f"identity_sigma_{dimensions}_test.npy")
 
-    # Get training and test sets 
-    X_block_train, X_prior_train =  X_block[:-10000], X_prior[:-10000] 
-    X_block_test, X_prior_test = X_block[90000:], X_prior[90000:] 
-
+    # Get training and test sets
     X_block_train, X_prior_train =  torch.from_numpy(X_block_train).to("cuda"), torch.from_numpy(X_prior_train).to("cuda")
+    X_block_val, X_prior_val = torch.from_numpy(X_block_val).to("cuda"), torch.from_numpy(X_prior_val).to("cuda")
     X_block_test, X_prior_test = torch.from_numpy(X_block_test).to("cuda"), torch.from_numpy(X_prior_test).to("cuda")
         
     # Scheduler parameters 
@@ -144,14 +163,25 @@ def main(config: DictConfig):
     else:
         sigma = 0.0
 
-    estimated_ratios = []
+    estimated_ratios_val = []
+    estimated_ratios_test = []
     for _ in range(3):
-        estimated_ratios_i = train_scratio(X_block_train, X_prior_train, X_block_test, X_prior_test, scheduler_type, sigma)
-        estimated_ratios.append(estimated_ratios_i)
+        estimated_ratios_i_val, estimated_ratios_i_test = train_scratio(X_block_train, 
+                                           X_prior_train,
+                                           X_block_val, 
+                                           X_prior_val, 
+                                           X_block_test,
+                                           X_prior_test,
+                                           scheduler_type, 
+                                           sigma)
+        
+        estimated_ratios_val.append(estimated_ratios_i_val)
+        estimated_ratios_test.append(estimated_ratios_i_test)
     
-    estimated_ratios = np.concatenate(estimated_ratios)
-    np.save(res_dir / f"ratios_{dimensions}.npy", estimated_ratios)
-    
+    ratio_estimations_val, ratio_estimations_test = np.concatenate(estimated_ratios_val), np.concatenate(estimated_ratios_test)
+    np.save(res_dir / f"ratios_{dimensions}_val.npy", ratio_estimations_val)
+    np.save(res_dir / f"ratios_{dimensions}_test.npy", ratio_estimations_test)
+
 if __name__ == "__main__":
     # running the experiment
     try: 

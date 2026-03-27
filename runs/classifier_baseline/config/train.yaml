@@ -1,0 +1,8 @@
+# @package _global_
+
+# default (unconditional)
+defaults:
+  - _self_
+  - model: default
+  - paths: mi
+  - hydra: default  

@@ -1,0 +1,3 @@
+res_dir: ../../project_folder/results/mi_experiments/classifier/mi/
+data_path: ../../project_folder/data/mi_data/split_data/
+dimensions:  20

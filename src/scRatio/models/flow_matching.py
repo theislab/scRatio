@@ -160,16 +160,22 @@ class ConditionalFlowMatchingWithScore(L.LightningModule):
         lambda_sp_t: Callable,
         betas: list,
         lr: float = 1e-4,
-        dropout: float = 0
+        dropout: float = 0,
+        unconditional: bool = False
     ):
         super().__init__()
         
-        self.data_encoder = Encoder(input_dim, encoder_hidden_dims, encoder_out_dim, dropout)
-        self.cond_encoders = nn.ModuleList([
-            Encoder(cond_dim, encoder_hidden_dims, encoder_out_dim_cond, dropout)
-            for cond_dim in cond_dims
-        ])
+        self.unconditional = unconditional
         
+        self.data_encoder = Encoder(input_dim, encoder_hidden_dims, encoder_out_dim, dropout)
+        if not unconditional:
+            self.cond_encoders = nn.ModuleList([
+                Encoder(cond_dim, encoder_hidden_dims, encoder_out_dim_cond, dropout)
+                for cond_dim in cond_dims
+            ])
+        else:
+            encoder_out_dim_cond = 0
+
         self.vf_mlp = FlowMatchingMLP(
             encoder_out_dim + encoder_out_dim_cond * len(cond_dims) + time_feature_dim,
             hidden_dims,
@@ -215,14 +221,16 @@ class ConditionalFlowMatchingWithScore(L.LightningModule):
 
         start = 0
         xc = self.data_encoder(x)
-        for i, cond_dim in enumerate(self.cond_dims):
-            if use_conds[i]:
-                cond_enc = self.cond_encoders[i](cond[:, start:(start + cond_dim)])  
-            else:
-                cond_enc = torch.zeros(xc.shape[0], self.encoder_out_dim_cond).to(xc.device).float()
-            
-            xc = torch.cat([xc, cond_enc], dim=1)
-            start += cond_dim
+        
+        if not self.unconditional:
+            for i, cond_dim in enumerate(self.cond_dims):
+                if use_conds[i]:
+                    cond_enc = self.cond_encoders[i](cond[:, start:(start + cond_dim)])  
+                else:
+                    cond_enc = torch.zeros(xc.shape[0], self.encoder_out_dim_cond).to(xc.device).float()
+                
+                xc = torch.cat([xc, cond_enc], dim=1)
+                start += cond_dim
 
         if self.time_feature_dim > 1:
             xtc = torch.cat([xc, sinusoidal_time_features(t, self.time_feature_dim)], dim=1)
