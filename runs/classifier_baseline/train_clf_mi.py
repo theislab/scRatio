@@ -22,7 +22,7 @@ def train_classifier(X_train, y_train, model):
 
     # Training loop
     model.train()
-    for epoch in range(1000):  # Number of epochs
+    for epoch in range(200):  # Number of epochs
         total_loss = 0
         for X_batch, y_batch in tqdm(train_loader):
             optimizer.zero_grad()

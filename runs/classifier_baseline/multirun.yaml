@@ -35,9 +35,10 @@ hydra:
     _target_: hydra._internal.core_plugins.basic_sweeper.BasicSweeper
     max_batch_size: null
     params:
-      paths.dimensions: 20, 40, 80, 160, 320
-      model.hidden_dim: 64, 256, 512
-      model.num_hidden_layers: 2, 3, 4
+      paths.loc: 1.0, 2.0
+      paths.dimensions: 2, 5, 10, 20, 30
+      model.hidden_dim: 64, 128, 256
+      model.num_hidden_layers: 0, 1, 2, 3
   help:
     app_name: ${hydra.job.name}
     header: '${hydra.help.app_name} is powered by Hydra.
@@ -140,12 +141,13 @@ hydra:
     hydra:
     - hydra.mode=MULTIRUN
     task:
-    - +hparams_search=mi
+    - paths=gaussians
+    - +hparams_search=gaussians
     - +launcher=slurm
   job:
-    name: train_clf_mi
+    name: train_clf_gaussians
     chdir: null
-    override_dirname: +hparams_search=mi,+launcher=slurm
+    override_dirname: +hparams_search=gaussians,+launcher=slurm,paths=gaussians
     id: ???
     num: ???
     config_name: train
@@ -173,9 +175,9 @@ hydra:
     output_dir: ???
     choices:
       launcher: slurm
-      hparams_search: mi
+      hparams_search: gaussians
       hydra: default
-      paths: mi
+      paths: gaussians
       model: default
       hydra/env: default
       hydra/callbacks: null
@@ -191,6 +193,6 @@ model:
   hidden_dim: 256
   num_hidden_layers: 3
 paths:
-  res_dir: ../../project_folder/results/mi_experiments/classifier/mi/
-  data_path: ../../project_folder/data/mi_data/split_data/
-  dimensions: 20
+  res_dir: ../../project_folder/results/mi_experiments/classifier/gaussians/
+  dimensions: 2
+  loc: 1.0

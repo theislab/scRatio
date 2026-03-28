@@ -3,6 +3,7 @@
 hydra:
   sweeper:
     params:
-      paths.dimensions: 20, 40, 80, 160, 320
+      paths.loc: 1.0, 2.0
+      paths.dimensions: 2, 5, 10, 20, 30
       model.hidden_dim: 64, 128, 256
       model.num_hidden_layers: 0, 1, 2, 3
