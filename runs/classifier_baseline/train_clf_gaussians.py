@@ -12,6 +12,7 @@ from sklearn.model_selection import train_test_split
 from train_clf_mi import train_classifier
 
 def prepare_dataset(n, N, cond_dim, locs, device="cuda"):
+    # Set random seed 
     np.random.seed(42)
     
     # Generate synthetic dataset of N samples, where each sample is drawn from a Gaussian distribution whose mean is determined by its class label.
