@@ -10,11 +10,14 @@
 #SBATCH --qos=cpu_normal
 #SBATCH --nice=0
 
+source /home/icb/egor.antipov/miniconda3/bin/activate
+conda activate scaling-transformers
 export HYDRA_FULL_ERROR=1
 
-python ./runs/gaussian_tests/scripts/make_comparison.py \
+python ./runs/gaussian_tests/scripts/make_comparison_additional.py \
     --multirun \
-    +loc=1,2,4 \
+    +num_samples=110_000 \
+    +loc=1,2 \
     +num_dims=2,5,10,20,30 \
-    +start_from_scratch=true \
+    +start_from_scratch=false \
     +launcher=super_gpu_normal

@@ -10,6 +10,8 @@
 #SBATCH --qos=cpu_normal
 #SBATCH --nice=0
 
+source /home/icb/egor.antipov/miniconda3/bin/activate
+conda activate scaling-transformers
 export HYDRA_FULL_ERROR=1
 
 python ./runs/gaussian_tests/scripts/make_a_sweep.py \
@@ -17,5 +19,5 @@ python ./runs/gaussian_tests/scripts/make_a_sweep.py \
     +num_dims=2,5,10,20,30 \
     +lr=0.001,0.0001 \
     +cond_latent_dim=32,64,128 \
-    +start_from_scratch=true \
-    +launcher=super_gpu_normal
+    +start_from_scratch=false \
+    +launcher=gpu_normal
