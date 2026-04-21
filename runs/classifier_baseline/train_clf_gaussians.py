@@ -98,6 +98,9 @@ def main(config: DictConfig):
         
         np.save(res_dir / "log_ratios_val.npy", log_ratios_val)
         np.save(res_dir / "log_ratios_test.npy", log_ratios_test)
+        np.save(res_dir / "true_log_ratios_val.npy", true_log_ratios_val)
+        np.save(res_dir / "X_val.npy", X_val.cpu().numpy())
+        np.save(res_dir / "X_test.npy", X_test.cpu().numpy())
         metrics_df = pd.DataFrame([metrics])
         metrics_df.to_csv(res_dir / "metrics.csv", index=False)
 
